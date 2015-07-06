@@ -149,10 +149,6 @@ class InstallCommand : Command {
         
         print ("Collecting package definitions...");
         packages = self._collect (args);
-        if (packages == null) {
-            return;
-        }
-        
         
         install = self._confirm (packages);
         
