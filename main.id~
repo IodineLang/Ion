@@ -1,0 +1,435 @@
+use io;
+use json;
+use os;
+use webclient;
+use ziplib;
+
+use .repos;
+
+DEFAULT_COMMAND = "help";
+DEFAULT_DIR = os.userDir + "/.ion";
+LOCAL_STORE = os.userDir + "/.iodinepackages";
+
+func main (args) {
+    repoManager = repos.RepoManager (DEFAULT_DIR + "/repos.json");
+
+    commands = hashMap ();
+    
+    commands ["add-repo"] = AddRepoCommand (repoManager);
+    commands ["delete-repo"] = DeleteRepoCommand (repoManager);
+    commands ["list-repos"] = ListReposCommand (repoManager);
+    
+    commands ["search"] = SearchCommand (repoManager);
+    commands ["info"] = InfoCommand (repoManager);
+    commands ["install"] = InstallCommand (repoManager);
+    
+    commands ["purge-cache"] = PurgeCacheCommand ();
+    commands ["purge"] = PurgeCommand ();
+    
+    commands ["help"] = HelpCommand(commands);
+    
+    parameters = list ();
+    for (i = 0; i < args.getSize (); i += 1) {
+        if (i >= 1) {
+           parameters.add (args [i]);
+        }
+    }
+    
+    try {
+        commands [args [0]].call (parameters);
+    }
+    except (e as IndexException, KeyNotFoundException) {
+        print ("Unknown argument(s). Type `ion help` for help with ion.");
+    }
+}
+
+class Command {
+    func Command (self, name, helpText) {
+        self.name = name;
+        self.helpText = helpText;
+    }
+    
+    func call (self, args) {
+        raise ("Call not implemented correctly in \"{}\"".format (self.name));
+    }
+}
+
+class PurgeCacheCommand : Command {
+    func PurgeCacheCommand (self) {
+        super ("purge-cache", "Purges installation files from the specified " +
+               "package's cache in .ion.");
+    }
+    
+    func call (self, args) {
+        if (args.getSize () != 1) {
+            print ("ion purge-cache requires one argument.");
+            return;
+        }
+        
+        cacheDir = "{}/{}".format (DEFAULT_DIR, args [0]);
+        cacheZip = "{}/{}.zip".format (DEFAULT_DIR, args [0])
+        print ("Purging {}...".format (cacheDir));
+        try {
+            io.File.remove (cacheZip);
+            self._clean (cacheDir);
+        }
+        except (e as IOException) {
+            print ("Could not purge. Does this module even exist?");
+        }
+    }
+    
+    func _clean (self, dir) {
+        foreach (directory in io.Directory.listDirectories (dir)) {
+            self._clean (directory);
+        }
+        foreach (file in io.Directory.listFiles (dir)) {
+            io.File.remove (file);
+        }
+        
+        io.Directory.remove (dir);
+    }
+}
+
+class PurgeCommand : Command {
+    func PurgeCommand (self) {
+        super ("purge", "Removes all traces of the package from your local " +
+               "store and registers it as uninstalled.");
+    }
+    
+    func call (self, args) {
+        if (args.getSize () != 1) {
+            print ("ion purge takes only one argument (package name)");
+        }
+        
+        print ("Purging {}".format (args [0]));
+        dataFile = "{}/data/{}.json".format (DEFAULT_DIR, args [0]);
+        ionData = null;
+        try {
+            f = open (dataFile, "r");
+            ionData = json.parse (f.readAllText());
+            f.close ();
+        }
+        except (e as IOException) {
+            print ("Could not find package configuration file. This package is"+
+                   " probably not installed on your system.");
+            return;
+        } 
+        
+        foreach (mod in ionData ["modules"]) {
+            modulePath = "{}/{}".format (ionData ["store"], mod);
+            self._clean (modulePath);
+        }
+        
+        io.File.remove (
+        print ("Purged all remnants of {}".format (args [0]));
+    }
+    
+    func _clean (self, dir) {
+        foreach (directory in io.Directory.listDirectories (dir)) {
+            self._clean (directory);
+        }
+        foreach (file in io.Directory.listFiles (dir)) {
+            io.File.remove (file);
+        }
+        
+        io.Directory.remove (dir);
+    }
+}
+
+class InstallCommand : Command {
+    func InstallCommand (self, repoManager) {
+        super ("install", "Installs the specified package.");
+        self.repoManager = repoManager;
+    }
+    
+    func call (self, args) {
+        if (args.getSize () < 1) {
+            print ("ion install requires at least one argument.");
+        }
+        
+        print ("Collecting package definitions...");
+        packages = self._collect (args);
+        
+        install = self._confirm (packages);
+        
+        if (install) {
+            self._install (getEnv ("IODINE_PATH"), packages);
+        }
+        else {
+            print ("Abandoning install...");
+            return;
+        }
+    }
+    
+    func _writePackageInfo (self, packageName, packageModules) {
+        pkgDir = "{}/data".format (DEFAULT_DIR);
+        if (!io.Directory.exists (pkgDir)) {
+            io.Directory.create (pkgDir);
+        }
+        
+        pkgFile = "{}/{}.json".format (pkgDir, packageName);
+        if (io.File.exists (pkgFile)) {
+            return false;
+        }
+        
+        data = hashMap ();
+        data ["name"] = packageName;
+        data ["modules"] = packageModules;
+        data ["store"] = LOCAL_STORE;
+        
+        f = open (pkgFile, "w");
+        f.write (json.dump (data));
+        f.close();
+        
+        return true;
+    }
+    
+    func _install (self, directory, packages) {
+        foreach (package in packages) {
+            print ("Installing {} from {}...".format (package ["name"], 
+                   package ["download"]));
+            webclient.disableCertificateCheck();
+            
+            loc = "{}/{}.zip".format(DEFAULT_DIR, package ["modulename"]);
+            if (io.File.exists (loc)) {
+                io.File.remove (loc);
+            }
+            webclient.WebClient ().downloadFile (package ["download"], loc);
+            
+            extractedDir = "{}/{}".format (DEFAULT_DIR, package ["modulename"]);
+            print ("Unzipping {} to {}...".format (loc, extractedDir));
+            ziplib.unzipToDirectory (loc, extractedDir);
+            
+            ionbase = "{}/{}".format(extractedDir, package ["ionfileLocation"]);
+            ionfileLocation = "{}/ionfile.json".format (ionbase);
+            print ("Searching for ionfile (at {})".format (ionfileLocation));
+            f = open (ionfileLocation, "r").readAllText();
+            ionfile = json.parse (f);
+            
+            moduleList = map (ionfile ["modules"], lambda (x) => {
+                return x;
+            });
+            
+            if (!self._writePackageInfo (package ["modulename"], moduleList)) {
+                print ("ERR! Abandoning installation - package seems to " +
+                       "already exist!");
+                return;
+            }
+            
+            print ("Installing Iodine modules ({} to install)...".format (
+                   ionfile ["modules"].getSize ()));
+            foreach (module in ionfile ["modules"]) {
+                print ("Installing module {}...".format (module));
+                filesToCopy = "{}/{}".format (ionbase, 
+                              ionfile ["modules"] [module]);
+                io.Directory.copy (filesToCopy, "{}/{}".format (LOCAL_STORE, 
+                                   module));
+            }
+            
+            foreach (extension in ionfile ["extensions"]) {
+                print ("WARN! Extension install not implemented.");
+            }
+                
+            print ("Installation successful.");
+        }
+    }
+    
+    func _confirm (self, packages) {
+        print ("Confirm installation of packages: ");
+        print ("-----------------");
+        names = map (packages, lambda (x) => {
+            return "{} ({})".format (x ["name"], x ["version"]);
+        });
+        print (", ".join (names));
+        print ("-----------------");
+        print ("Any packages containing @ have multiple repository definitions"+
+               ", and are using the named repository.");
+        print ("");
+        iodineDir = getEnv ("IODINE_PATH");
+        if (iodineDir != null) {
+            print ("Packages will be installed to: {}".format (iodineDir));
+        }
+        else {
+            print ("The IODINE_PATH environment variable is not available. " +
+                   "Ensure that Iodine is installed correctly, or set it " +
+                   "manually before running Ion.");
+            return;
+        }
+        print ("Is this ok? (y/n)");
+        resp = input ().toLower ();
+        return resp.startsWith ("y");
+    }
+    
+    func _collect (self, args) {
+        packages = list ();
+        foreach (arg in args) {
+            results = self.repoManager.search (arg);
+            if (results.getSize () == 0) {
+                print ("Package {} not found. Abandoning install.".format (
+                       arg));
+                return;
+            }
+            else if (results.getSize () > 1) {
+                results [0] ["name"] = "{}@{}".format (results [0] ["name"], 
+                                                       results [0] ["repo"]);
+            }
+            
+            print ("Found package {}.".format (arg));
+            packages.add (results [0]);
+        }
+        
+        return packages;
+    }
+}
+
+class AddRepoCommand : Command {
+    func AddRepoCommand (self, repoManager) {
+        super ("add-repo", "Adds a repository to your repositories list.");
+        self.repoManager = repoManager;
+    }
+    
+    func call (self, args) {
+        if (args.getSize () != 2) {
+            args = list ();
+            print ("Enter repository name: ");
+            args.add (input ());
+            print ("Enter repository URL: ");
+            args.add (input ());
+        }
+        
+        self.repoManager.addRepo (args [0], args [1]);
+        print ("Added repository {} (at {})".format (args [0], args [1]));
+    }
+}
+
+class ListReposCommand : Command {
+    func ListReposCommand (self, repoManager) {
+        super ("list-repos", "Lists all repositories currently used by Ion.");
+        self.repoManager = repoManager;
+    }
+    
+    func call (self, args) {
+        if (args.getSize() > 0) {
+            print ("ion list-repos does not take any arguments.");
+            return;
+        }
+        
+        print ("Repositories: ");
+        foreach (repo in self.repoManager.repoData) {
+            repoData = self.repoManager.repoData [repo];
+            print ("  {} ({})".format (repo, repoData ["url"]));
+        }
+    }
+}
+
+class DeleteRepoCommand : Command {
+    func DeleteRepoCommand (self, repoManager) {
+        super ("delete-repo", "Deletes the specified repository from the " +
+               "repository list."); 
+        self.repoManager = repoManager;
+    }
+    
+    func call (self, args) {
+        if (args.getSize () != 1) {
+            print ("ion delete-repo requires one argument (the repository " +
+                   "name)");
+            return;
+        }
+        
+        if (self.repoManager.deleteRepo (args [0])) {
+            print ("Repository {} deleted successfully.".format (args [0]));
+        }
+        else {
+            print ("Could not find the specified repository. Use " +
+                   "`ion list-repos` to view a list of all repositories used " +
+                   "by Ion.");
+        }
+    }
+}
+
+class SearchCommand : Command {
+    func SearchCommand (self, repoManager) {
+        super ("search", "Searches all repositories for the specified " +
+               "package.");
+        self.repoManager = repoManager;
+    }
+    
+    func call (self, args) {
+        if (args.getSize () != 1) {
+            print ("ion search requires one argument (the package to search" + 
+                   " for).");
+            return;
+        }
+        
+        results = self.repoManager.search (args [0]);
+        
+        if (results.getSize() == 0) {
+            print ("No results found. Try a broader search, and ensure there " +
+                   "are no spelling mistakes in your search");
+            return;
+        }
+        
+        print ("Found {} results.".format (results.getSize()));
+        print ("Packages: ");
+        foreach (res in results) {
+            print ("- {} (in repository {})".format (res ["name"], 
+                   res["repo"]));
+            print ("|-- {}".format (res ["description"]));
+        }
+        
+        print ("Too many results? Type `ion search {} | less`, then press 'q'" +
+               " to exit".format (args[0]));
+        
+    }
+}
+
+class InfoCommand : Command {
+    func InfoCommand (self, repoManager) {
+        super ("info", "Gets information about the specified package.");
+        self.repoManager = repoManager;
+    }
+    
+    func call (self, args) {
+        if (args.getSize () != 2) {
+            print ("ion info requires two arguments (the package to get " +
+                   "information for, and the repository to use).");
+            return;
+        }
+        
+        results = self.repoManager.search (args [0]);
+        results = filter (results, lambda (x) => {
+            return x ["repo"] == args [1];
+        });
+        
+        if (results.getSize () == 0) {
+            print ("Ion could not find this package in the specified " + 
+                   "repository.");
+            return;
+        }
+        
+        print ("Package {} (module name {})".format (results [0] ["name"], 
+               results [0] ["modulename"]));
+        print ("Description: {}".format (results [0] ["description"]));
+        print ("Download at: {}".format (results [0] ["download"]));
+        maintainer = results [0] ["maintainer"];
+        print ("Maintained by: {} ({})".format (maintainer ["name"], 
+               maintainer ["url"]));
+    }
+
+}
+
+
+class HelpCommand : Command {
+    func HelpCommand (self, commands) {
+        super ("help", "Shows this help message.");
+        self.commands = commands;
+    }
+    
+    func call (self, args) {
+        print ("Commands:");
+        foreach (command in self.commands) {
+            cmd = self.commands[command];
+            print("  {} - {}".format(cmd.name, cmd.helpText));
+        }
+    }
+}
