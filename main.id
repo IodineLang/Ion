@@ -297,6 +297,26 @@ class InstallCommand : Command {
             }
             
             print ("Found package {}.".format (arg));
+            deps = list ();
+            foreach (dep in results [0] ["dependencies"]) {
+                print ("Collecting dependency {}".format (dep ["name"]));
+                deps = self._collect ({ dep ["name"] });
+                if (deps [deps.getSize () - 1] ["versionMajor"] != 
+                    dep ["versionMajor"]) {
+                    print ("Dependency version mismatch with {}".format 
+                           (dep ["name"]));
+                    return null;
+                }
+                if (deps [deps.getSize () - 1] ["versionMinor"] != 
+                    dep ["versionMinor"]) {
+                    print ("Dependency version mismatch with {}".format 
+                           (dep ["name"]));
+                    return null;
+                }
+                foreach (pkg in deps) {
+                    packages.add (pkg);
+                }
+            }
             packages.add (results [0]);
         }
         
