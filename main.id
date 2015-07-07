@@ -1,7 +1,7 @@
 use io;
 use hash;
 use json;
-use loglib;
+use FileLogger, Logger, OutputLogger from loglib;
 use os;
 use webclient;
 use ziplib;
@@ -13,6 +13,15 @@ DEFAULT_DIR = os.userDir + "/.ion";
 LOCAL_STORE = os.userDir + "/.iodinepackages";
 
 func main (args) {
+    if (!io.Directory.exists (DEFAULT_DIR)) {
+        io.Directory.create (DEFAULT_DIR);
+    }
+    outLog = OutputLogger (0);
+    outLog.setFormat ("ion {6}: {7}");
+    fileLog = FileLogger (DEFAULT_DIR + "/ion.log", 0);
+    Logger.register (outLog);
+    Logger.register (fileLog);
+
     repoManager = repos.RepoManager (DEFAULT_DIR + "/repos.json");
 
     commands = hashMap ();
@@ -41,7 +50,7 @@ func main (args) {
         commands [args [0]].call (parameters);
     }
     except (e as IndexException, KeyNotFoundException) {
-        print ("Unknown argument(s). Type `ion help` for help with ion.");
+        Logger.fatal ("Unknown argument(s). Type `ion help` for help with ion.");
     }
 }
 
@@ -64,18 +73,18 @@ class PurgeCacheCommand : Command {
     
     func call (self, args) {
         if (args.getSize () != 1) {
-            print ("ion purge-cache requires one argument.");
+            Logger.fatal ("ion purge-cache requires one argument.");
             return;
         }
         
         cacheDir = "{}/{}".format (DEFAULT_DIR, args [0]);
         cacheZip = "{}/{}.zip".format (DEFAULT_DIR, args [0])
-        print ("Purging {}...".format (cacheDir));
+        Logger.info ("Purging {}...".format (cacheDir));
         try {
             io.File.remove (cacheZip);
         }
         except (e as IOException) {
-            print ("ERR! Could not purge. Does this module even exist?");
+            Logger.fatal ("Could not purge. Does this module even exist?");
             return;
         }
         
@@ -83,8 +92,8 @@ class PurgeCacheCommand : Command {
             self._clean (cacheDir);
         }
         except (e as IOException) {
-            print ("WARN! Could not purge extracted files. Installation may " +
-                   "have failed before this. If so, ignore this warning.");
+            Logger.warn ("Could not purge extracted files. Installation may " +
+                  "have failed before this. If so, ignore this warning.");
         }
     }
     
@@ -108,10 +117,10 @@ class PurgeCommand : Command {
     
     func call (self, args) {
         if (args.getSize () != 1) {
-            print ("ion purge takes only one argument (package name)");
+            Logger.fatal ("ion purge takes only one argument (package name)");
         }
         
-        print ("Purging {}".format (args [0]));
+        Logger.info ("Purging {}...".format (args [0]));
         dataFile = "{}/data/{}.json".format (DEFAULT_DIR, args [0]);
         ionData = null;
         try {
@@ -120,8 +129,8 @@ class PurgeCommand : Command {
             f.close ();
         }
         except (e as IOException) {
-            print ("Could not find package configuration file. This package is"+
-                   " probably not installed on your system.");
+            Logger.fatal ("Could not find package configuration file. This " +
+                          "package is probably not installed on your system.");
             return;
         } 
         
@@ -131,7 +140,7 @@ class PurgeCommand : Command {
         }
         
         io.File.remove (dataFile);
-        print ("Purged all remnants of {}".format (args [0]));
+        Logger.info ("Purged module successfully.");
     }
     
     func _clean (self, dir) {
@@ -154,10 +163,10 @@ class InstallCommand : Command {
     
     func call (self, args) {
         if (args.getSize () < 1) {
-            print ("ion install requires at least one argument.");
+            Logger.fatal ("ion install requires at least one argument.");
         }
         
-        print ("Collecting package definitions...");
+        Logger.info ("Collecting package definitions...");
         packages = self._collect (args);
         if (packages == null) {
             return;
@@ -170,7 +179,7 @@ class InstallCommand : Command {
             self._install (getEnv ("IODINE_PATH"), packages);
         }
         else {
-            print ("Abandoning install...");
+            Logger.warn ("Abandoning install...");
             return;
         }
     }
@@ -200,8 +209,8 @@ class InstallCommand : Command {
     
     func _install (self, directory, packages) {
         foreach (package in packages) {
-            print ("Installing {} from {}...".format (package ["name"], 
-                   package ["download"]));
+            Logger.info ("Installing {} from {}...".format (package ["name"], 
+                         package ["download"]));
             webclient.disableCertificateCheck();
             
             loc = "{}/{}.zip".format(DEFAULT_DIR, package ["modulename"]);
@@ -213,18 +222,19 @@ class InstallCommand : Command {
             f = open (loc, "r");
             hashVal = Str (hash.sha1 (f));
             if (hashVal != package ["sha1"]) {
-                print ("SHA1 could not be verified. Please run " +
+                Logger.fatal ("SHA1 could not be verified. Please run " +
                        "`ion purge-cache {}`".format (package ["modulename"]));
                 return;
             }
             f.close ();
             extractedDir = "{}/{}".format (DEFAULT_DIR, package ["modulename"]);
-            print ("Unzipping {} to {}...".format (loc, extractedDir));
+            Logger.info ("Unzipping {} to {}...".format (loc, extractedDir));
             ziplib.unzipToDirectory (loc, extractedDir);
             
             ionbase = "{}/{}".format(extractedDir, package ["ionfileLocation"]);
             ionfileLocation = "{}/ionfile.json".format (ionbase);
-            print ("Searching for ionfile (at {})".format (ionfileLocation));
+            Logger.info ("Searching for ionfile (at {})".format 
+                         (ionfileLocation));
             f = open (ionfileLocation, "r").readAllText();
             ionfile = json.parse (f);
             
@@ -233,15 +243,15 @@ class InstallCommand : Command {
             });
             
             if (!self._writePackageInfo (package ["modulename"], moduleList)) {
-                print ("ERR! Abandoning installation - package seems to " +
-                       "already exist!");
+                Logger.fatal ("Abandoning installation - package seems to " +
+                              "already exist!");
                 return;
             }
             
-            print ("Installing Iodine modules ({} to install)...".format (
+            Logger.info ("Installing Iodine modules ({} to install)...".format (
                    ionfile ["modules"].getSize ()));
             foreach (module in ionfile ["modules"]) {
-                print ("Installing module \"{}\"...".format (module));
+                Logger.info ("Installing module \"{}\"...".format (module));
                 filesToCopy = "{}/{}".format (ionbase, 
                               ionfile ["modules"] [module]);
                 io.Directory.copy (filesToCopy, "{}/{}".format (LOCAL_STORE, 
@@ -249,10 +259,10 @@ class InstallCommand : Command {
             }
             
             foreach (extension in ionfile ["extensions"]) {
-                print ("WARN! Extension install not implemented.");
+                Logger.warn ("Extension install not implemented.");
             }
                 
-            print ("Installation successful.");
+            Logger.info ("Installation successful.");
         }
     }
     
@@ -272,9 +282,9 @@ class InstallCommand : Command {
             print ("Packages will be installed to: {}".format (iodineDir));
         }
         else {
-            print ("The IODINE_PATH environment variable is not available. " +
-                   "Ensure that Iodine is installed correctly, or set it " +
-                   "manually before running Ion.");
+            Logger.fatal ("The IODINE_PATH environment variable is not " +
+                   "available. Ensure that Iodine is installed correctly, or " +
+                   "set it manually before running Ion.");
             return;
         }
         print ("Is this ok? (y/n)");
@@ -287,8 +297,8 @@ class InstallCommand : Command {
         foreach (arg in args) {
             results = self.repoManager.search (arg);
             if (results.getSize () == 0) {
-                print ("Package {} not found. Abandoning install.".format (
-                       arg));
+                Logger.fatal ("Package {} not found. Abandoning install."
+                              .format (arg));
                 return null;
             }
             else if (results.getSize () > 1) {
@@ -296,7 +306,7 @@ class InstallCommand : Command {
                                                        results [0] ["repo"]);
             }
             
-            print ("Found package {}.".format (arg));
+            Logger.info ("Found package {}.".format (arg));
             packages.add (results [0]);
         }
         
@@ -319,8 +329,13 @@ class AddRepoCommand : Command {
             args.add (input ());
         }
         
-        self.repoManager.addRepo (args [0], args [1]);
-        print ("Added repository {} (at {})".format (args [0], args [1]));
+        try {
+            self.repoManager.addRepo (args [0], args [1]);
+        }
+        except (e) {
+            Logger.error ("Error while adding repository: {}".format (e.message));
+        }
+        Logger.info ("Added repository {} (at {})".format (args [0], args [1]));
     }
 }
 
@@ -332,7 +347,7 @@ class ListReposCommand : Command {
     
     func call (self, args) {
         if (args.getSize() > 0) {
-            print ("ion list-repos does not take any arguments.");
+            Logger.fatal ("ion list-repos does not take any arguments.");
             return;
         }
         
@@ -353,16 +368,16 @@ class DeleteRepoCommand : Command {
     
     func call (self, args) {
         if (args.getSize () != 1) {
-            print ("ion delete-repo requires one argument (the repository " +
-                   "name)");
+            Logger.fatal ("ion delete-repo requires one argument (the " +
+                   "repository name)");
             return;
         }
         
         if (self.repoManager.deleteRepo (args [0])) {
-            print ("Repository {} deleted successfully.".format (args [0]));
+            Logger.info ("Repository {} deleted successfully.".format (args [0]));
         }
         else {
-            print ("Could not find the specified repository. Use " +
+            Logger.fatal ("Could not find the specified repository. Use " +
                    "`ion list-repos` to view a list of all repositories used " +
                    "by Ion.");
         }
@@ -378,16 +393,16 @@ class SearchCommand : Command {
     
     func call (self, args) {
         if (args.getSize () != 1) {
-            print ("ion search requires one argument (the package to search" + 
-                   " for).");
+            logger.fatal ("ion search requires one argument (the package to " + 
+                          "search for).");
             return;
         }
         
         results = self.repoManager.search (args [0]);
         
         if (results.getSize() == 0) {
-            print ("No results found. Try a broader search, and ensure there " +
-                   "are no spelling mistakes in your search");
+            logger.error ("No results found. Try a broader search, and ensure" +
+                          " there are no spelling mistakes in your search");
             return;
         }
         
@@ -413,8 +428,8 @@ class InfoCommand : Command {
     
     func call (self, args) {
         if (args.getSize () != 2) {
-            print ("ion info requires two arguments (the package to get " +
-                   "information for, and the repository to use).");
+            Logger.fatal ("ion info requires two arguments (the package to " +
+                          "get information for, and the repository to use).");
             return;
         }
         
@@ -424,8 +439,8 @@ class InfoCommand : Command {
         });
         
         if (results.getSize () == 0) {
-            print ("Ion could not find this package in the specified " + 
-                   "repository.");
+            Logger.error ("Ion could not find this package in the specified " + 
+                          "repository.");
             return;
         }
         
