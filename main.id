@@ -313,9 +313,7 @@ class InstallCommand : Command {
                            (dep ["name"]));
                     return null;
                 }
-                foreach (pkg in deps) {
-                    packages.add (pkg);
-                }
+                packages = packages + deps;
             }
             packages.add (results [0]);
         }
