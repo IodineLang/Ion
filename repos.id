@@ -18,6 +18,10 @@ class RepoManager {
             dir = "/".join (directoryArray);
             print ("Couldn't find .ion directory, creating {}".format(dir));
             io.Directory.create (dir);
+            print ("Adding repository \"Default\"");
+            self._openFile ();
+            self.addRepo ("Default", "http://iodinelang.github.io/Ion-Default-Repo");
+            self.file.close ();
             self._openFile ();
         }
     }

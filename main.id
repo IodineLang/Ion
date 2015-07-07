@@ -30,14 +30,20 @@ func main (args) {
     commands ["help"] = HelpCommand(commands);
     
     parameters = list ();
+    flags = list ();
     for (i = 0; i < args.getSize (); i += 1) {
         if (i >= 1) {
-           parameters.add (args [i]);
+           if (args [i].startsWith ("--")) {
+               flags.add (args [i]);
+           }
+           else {
+               parameters.add (args [i]);
+           }
         }
     }
     
     try {
-        commands [args [0]].call (parameters);
+        commands [args [0]].call (parameters, flags);
     }
     except (e as IndexException, KeyNotFoundException) {
         print ("Unknown argument(s). Type `ion help` for help with ion.");
@@ -50,7 +56,7 @@ class Command {
         self.helpText = helpText;
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         raise ("Call not implemented correctly in \"{}\"".format (self.name));
     }
 }
@@ -61,7 +67,7 @@ class PurgeCacheCommand : Command {
                "package's cache in .ion.");
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         if (args.getSize () != 1) {
             print ("ion purge-cache requires one argument.");
             return;
@@ -105,7 +111,7 @@ class PurgeCommand : Command {
                "store and registers it as uninstalled.");
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         if (args.getSize () != 1) {
             print ("ion purge takes only one argument (package name)");
         }
@@ -151,9 +157,13 @@ class InstallCommand : Command {
         self.repoManager = repoManager;
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         if (args.getSize () < 1) {
             print ("ion install requires at least one argument.");
+        }
+        
+        if (flags.contains ("--global")) {
+            LOCAL_STORE = os.searchPaths [1];
         }
         
         print ("Collecting package definitions...");
@@ -163,10 +173,10 @@ class InstallCommand : Command {
         }
         
         
-        install = self._confirm (packages);
+        install = self._confirm (packages, LOCAL_STORE);
         
         if (install) {
-            self._install (getEnv ("IODINE_PATH"), packages);
+            self._install (LOCAL_STORE, packages);
         }
         else {
             print ("Abandoning install...");
@@ -243,7 +253,7 @@ class InstallCommand : Command {
                 print ("Installing module \"{}\"...".format (module));
                 filesToCopy = "{}/{}".format (ionbase, 
                               ionfile ["modules"] [module]);
-                io.Directory.copy (filesToCopy, "{}/{}".format (LOCAL_STORE, 
+                io.Directory.copy (filesToCopy, "{}/{}".format (directory, 
                                    module));
             }
             
@@ -255,7 +265,7 @@ class InstallCommand : Command {
         }
     }
     
-    func _confirm (self, packages) {
+    func _confirm (self, packages, dir) {
         print ("Confirm installation of packages: ");
         print ("-----------------");
         names = map (packages, lambda (x) => {
@@ -266,16 +276,7 @@ class InstallCommand : Command {
         print ("Any packages containing @ have multiple repository definitions"+
                ", and are using the named repository.");
         print ("");
-        iodineDir = getEnv ("IODINE_PATH");
-        if (iodineDir != null) {
-            print ("Packages will be installed to: {}".format (iodineDir));
-        }
-        else {
-            print ("The IODINE_PATH environment variable is not available. " +
-                   "Ensure that Iodine is installed correctly, or set it " +
-                   "manually before running Ion.");
-            return;
-        }
+        print ("Packages will be installed to: {}".format (dir));
         print ("Is this ok? (y/n)");
         resp = input ().toLower ();
         return resp.startsWith ("y");
@@ -309,7 +310,7 @@ class AddRepoCommand : Command {
         self.repoManager = repoManager;
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         if (args.getSize () != 2) {
             args = list ();
             print ("Enter repository name: ");
@@ -329,7 +330,7 @@ class ListReposCommand : Command {
         self.repoManager = repoManager;
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         if (args.getSize() > 0) {
             print ("ion list-repos does not take any arguments.");
             return;
@@ -375,7 +376,7 @@ class SearchCommand : Command {
         self.repoManager = repoManager;
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         if (args.getSize () != 1) {
             print ("ion search requires one argument (the package to search" + 
                    " for).");
@@ -410,7 +411,7 @@ class InfoCommand : Command {
         self.repoManager = repoManager;
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         if (args.getSize () != 2) {
             print ("ion info requires two arguments (the package to get " +
                    "information for, and the repository to use).");
@@ -446,7 +447,7 @@ class HelpCommand : Command {
         self.commands = commands;
     }
     
-    func call (self, args) {
+    func call (self, args, flags) {
         print ("Commands:");
         foreach (command in self.commands) {
             cmd = self.commands[command];
