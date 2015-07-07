@@ -1,4 +1,5 @@
 use io;
+use hash;
 use json;
 use os;
 use webclient;
@@ -71,10 +72,18 @@ class PurgeCacheCommand : Command {
         print ("Purging {}...".format (cacheDir));
         try {
             io.File.remove (cacheZip);
+        }
+        except (e as IOException) {
+            print ("ERR! Could not purge. Does this module even exist?");
+            return;
+        }
+        
+        try {
             self._clean (cacheDir);
         }
         except (e as IOException) {
-            print ("Could not purge. Does this module even exist?");
+            print ("WARN! Could not purge extracted files. Installation may " +
+                   "have failed before this. If so, ignore this warning.");
         }
     }
     
@@ -200,6 +209,14 @@ class InstallCommand : Command {
             }
             webclient.WebClient ().downloadFile (package ["download"], loc);
             
+            f = open (loc, "r");
+            hashVal = Str (hash.sha1 (f));
+            if (hashVal != package ["sha1"]) {
+                print ("SHA1 could not be verified. Please run " +
+                       "`ion purge-cache {}`".format (package ["modulename"]));
+                return;
+            }
+            f.close ();
             extractedDir = "{}/{}".format (DEFAULT_DIR, package ["modulename"]);
             print ("Unzipping {} to {}...".format (loc, extractedDir));
             ziplib.unzipToDirectory (loc, extractedDir);
@@ -223,7 +240,7 @@ class InstallCommand : Command {
             print ("Installing Iodine modules ({} to install)...".format (
                    ionfile ["modules"].getSize ()));
             foreach (module in ionfile ["modules"]) {
-                print ("Installing module {}...".format (module));
+                print ("Installing module \"{}\"...".format (module));
                 filesToCopy = "{}/{}".format (ionbase, 
                               ionfile ["modules"] [module]);
                 io.Directory.copy (filesToCopy, "{}/{}".format (LOCAL_STORE, 
