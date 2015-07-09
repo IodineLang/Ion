@@ -1,0 +1,27 @@
+use .semver;
+use .repos;
+
+func collectDeps (repoMgr, pkgData) {
+    deps = list ();
+    foreach (pkg in pkgData ["dependencies"]) {
+        deps.add (collectPkg (repoMgr, pkg ["name"], pkg ["version"]));
+    }
+    return deps;
+}
+
+func collectPkg (repoMgr, name, version) {
+    results = repoMgr.search (name);
+    ret = list ();
+    foreach (result in results) {
+        if (semver.SemanticVersion (result ["version"]).isMatch (version)) {
+            ret.add (result);
+            ret = ret + collectDeps (repoMgr, result);
+            return ret;
+        }
+        else {
+            raise ("Version mismatch with package {} (expected {}, got {})"
+                   .format (name, version, result ["version"]));
+        }
+    }
+}
+
