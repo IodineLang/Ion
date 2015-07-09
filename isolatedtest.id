@@ -1,10 +1,11 @@
-use .semver;
 use .repos;
-
+use .semver;
+use os;
 func collectDeps (repoMgr, pkgData) {
     deps = list ();
     foreach (pkg in pkgData ["dependencies"]) {
         deps.add (collectPkg (repoMgr, pkg ["name"], pkg ["version"]));
+        print (pkg);
     }
     return deps;
 }
@@ -12,17 +13,30 @@ func collectDeps (repoMgr, pkgData) {
 func collectPkg (repoMgr, name, version) {
     results = repoMgr.search (name);
     ret = list ();
+    res = null;
     foreach (result in results) {
         if (semver.SemanticVersion (result ["version"]).isMatch (version)) {
-            ret.add (result);
-            deps = collectDeps (repoMgr, result);
-            ret = ret + deps;
-            return ret;
+            res = result;
         }
         else {
             raise ("Version mismatch with package {} (expected {}, got {})"
                    .format (name, version, result ["version"]));
         }
     }
+    if (res != null) {
+        ret.add (result);
+        deps = collectDeps (repoMgr, result);
+        ret = ret + deps;
+        return ret;
+    }
+    else {
+        return ret;
+    }
 }
 
+func main () {
+    pkgs = collectPkg (repos.RepoManager (os.userDir + "/.ion/repos.json"), "potassium", "*");
+    foreach (pkg in pkgs) {
+        print (pkg ["name"]);
+    }
+}
