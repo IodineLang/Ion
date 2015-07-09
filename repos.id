@@ -51,10 +51,6 @@ class RepoManager {
                 pkgDef = webclient.WebClient ().downloadString (packageUrl);
                 pkgData = json.parse (pkgDef);
                 pkgData ["repo"] = repo;
-                pkgData ["version"] = "v{}.{}.{}".format (
-                                      pkgData ["versionMajor"], 
-                                      pkgData ["versionMinor"], 
-                                      pkgData ["versionPatch"]);
                                       
                 results.add (pkgData);
             }

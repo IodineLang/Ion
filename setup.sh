@@ -1,3 +1,5 @@
+#!/bin/bash
+
 if [ $(id -u) = 0 ]; then
    echo "Do not run this script as root. Aborting..."
    exit 1
@@ -7,4 +9,6 @@ mkdir ~/.iodinepackages
 #sudo cp ./ion_env.sh /etc/profile.d/ion.sh
 sudo cp -r ./ion_exec.sh /usr/bin/ion
 sudo chmod a+x /usr/bin/ion
-ion add-repo Default http://iodinelang.github.io/Ion-Default-Repo
+sudo rm /etc/profile.d/ion.sh
+echo -n "export IODINE_PATH=" | sudo tee /etc/profile.d/ion.sh
+echo ~/.iodinepackages | sudo tee -a /etc/profile.d/ion.sh

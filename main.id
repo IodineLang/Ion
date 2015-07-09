@@ -6,6 +6,7 @@ use webclient;
 use ziplib;
 
 use .repos;
+use .semver;
 
 DEFAULT_COMMAND = "help";
 DEFAULT_DIR = os.userDir + "/.ion";
@@ -26,6 +27,8 @@ func main (args) {
     
     commands ["purge-cache"] = PurgeCacheCommand ();
     commands ["purge"] = PurgeCommand ();
+    
+    commands ["update"] = UpdateCommand (repoManager);
     
     commands ["help"] = HelpCommand(commands);
     
@@ -184,7 +187,8 @@ class InstallCommand : Command {
         }
     }
     
-    func _writePackageInfo (self, packageName, packageModules) {
+    func _writePackageInfo (self, packageName, packageModules, packageDeps,
+                            pkgVer) {
         pkgDir = "{}/data".format (DEFAULT_DIR);
         if (!io.Directory.exists (pkgDir)) {
             io.Directory.create (pkgDir);
@@ -198,6 +202,9 @@ class InstallCommand : Command {
         data = hashMap ();
         data ["name"] = packageName;
         data ["modules"] = packageModules;
+        data ["dependencies"] = packageDeps;
+        data ["version"] = pkgVer;
+        
         data ["store"] = LOCAL_STORE;
         
         f = open (pkgFile, "w");
@@ -241,7 +248,8 @@ class InstallCommand : Command {
                 return x;
             });
             
-            if (!self._writePackageInfo (package ["modulename"], moduleList)) {
+            if (!self._writePackageInfo (package ["modulename"], moduleList, 
+                package ["dependencies"], package ["version"])) {
                 print ("ERR! Abandoning installation - package seems to " +
                        "already exist!");
                 return;
@@ -301,17 +309,13 @@ class InstallCommand : Command {
             foreach (dep in results [0] ["dependencies"]) {
                 print ("Collecting dependency {}".format (dep ["name"]));
                 deps = self._collect ({ dep ["name"] });
-                if (deps [deps.getSize () - 1] ["versionMajor"] != 
-                    dep ["versionMajor"]) {
-                    print ("Dependency version mismatch with {}".format 
-                           (dep ["name"]));
-                    return null;
-                }
-                if (deps [deps.getSize () - 1] ["versionMinor"] != 
-                    dep ["versionMinor"]) {
-                    print ("Dependency version mismatch with {}".format 
-                           (dep ["name"]));
-                    return null;
+                usedDep = deps [deps.getSize () - 1];
+                if (!semver.SemanticVersion(usedDep ["version"]).isMatch 
+                    (dep ["version"])) {
+                    print ("Version mismatch with dependency {} (expected {}, "+
+                           "got {})".format (dep ["name"], dep ["version"], 
+                           usedDep ["version"]));
+                    return;
                 }
                 packages = packages + deps;
             }
@@ -319,6 +323,28 @@ class InstallCommand : Command {
         }
         
         return packages;
+    }
+}
+
+class UpdateCommand : Command {
+    func UpdateCommand (self, repoManager) {
+        super ("update", "Searches for and updates all packages where " +
+               "available");
+        self.repoManager = repoManager;
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize () != 0) {
+             print ("ion update requires no arguments. Do you mean ion " +
+                    "upgrade?");
+             return;
+        }
+        
+        if (flags.contains ("--global")) {
+            LOCAL_STORE = os.searchPaths [1];
+        }
+        
+        print ("Not implemented.");
     }
 }
 
