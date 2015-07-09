@@ -180,8 +180,8 @@ class InstallCommand : Command {
             return;
         }
         
-        install = self._confirm (packages, LOCAL_STORE);
         
+        install = self._confirm (packages, LOCAL_STORE);
         
         if (install) {
             self._install (LOCAL_STORE, packages);
@@ -241,13 +241,8 @@ class InstallCommand : Command {
             f.close ();
             extractedDir = "{}/{}".format (DEFAULT_DIR, package ["modulename"]);
             print ("Unzipping {} to {}...".format (loc, extractedDir));
-            try {
-                ziplib.unzipToDirectory (loc, extractedDir);
-            }
-            except (e) {
-                print ("Module already installed!");
-                return;
-            }
+            ziplib.unzipToDirectory (loc, extractedDir);
+            
             ionbase = "{}/{}".format(extractedDir, package ["ionfileLocation"]);
             ionfileLocation = "{}/ionfile.json".format (ionbase);
             print ("Searching for ionfile (at {})".format (ionfileLocation));

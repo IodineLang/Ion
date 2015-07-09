@@ -15,8 +15,7 @@ func collectPkg (repoMgr, name, version) {
     foreach (result in results) {
         if (semver.SemanticVersion (result ["version"]).isMatch (version)) {
             ret.add (result);
-            deps = collectDeps (repoMgr, result);
-            ret = ret + deps;
+            ret = ret + collectDeps (repoMgr, result);
             return ret;
         }
         else {
