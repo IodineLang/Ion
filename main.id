@@ -7,7 +7,6 @@ use ziplib;
 
 use .repos;
 use .semver;
-use .pkgtools;
 
 DEFAULT_COMMAND = "help";
 DEFAULT_DIR = os.userDir + "/.ion";
@@ -171,12 +170,8 @@ class InstallCommand : Command {
         }
         
         print ("Collecting package definitions...");
-        packages = list ();
-        foreach (pkg in args) {
-            packages = packages + pkgtools.collectPkg 
-                       (self.repoManager, args [0], "*");
-        }
-        if (packages.getSize () == 0) {
+        packages = self._collect (args);
+        if (packages == null) {
             return;
         }
         
@@ -295,6 +290,40 @@ class InstallCommand : Command {
         return resp.startsWith ("y");
     }
     
+    func _collect (self, args) {
+        packages = list ();
+        foreach (arg in args) {
+            results = self.repoManager.search (arg);
+            if (results.getSize () == 0) {
+                print ("Package {} not found. Abandoning install.".format (
+                       arg));
+                return null;
+            }
+            else if (results.getSize () > 1) {
+                results [0] ["name"] = "{}@{}".format (results [0] ["name"], 
+                                                       results [0] ["repo"]);
+            }
+            
+            print ("Found package {}.".format (arg));
+            deps = list ();
+            foreach (dep in results [0] ["dependencies"]) {
+                print ("Collecting dependency {}".format (dep ["name"]));
+                deps = self._collect ({ dep ["name"] });
+                usedDep = deps [deps.getSize () - 1];
+                if (!semver.SemanticVersion(usedDep ["version"]).isMatch 
+                    (dep ["version"])) {
+                    print ("Version mismatch with dependency {} (expected {}, "+
+                           "got {})".format (dep ["name"], dep ["version"], 
+                           usedDep ["version"]));
+                    return;
+                }
+                packages = packages + deps;
+            }
+            packages.add (results [0]);
+        }
+        
+        return packages;
+    }
 }
 
 class UpdateCommand : Command {
