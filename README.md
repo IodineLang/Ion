@@ -22,8 +22,12 @@ that you support Ion. Simply add this to your README.md:
 
     [![ion install modulename](https://img.shields.io/badge/ion%20install-modulename-blue.svg?style=flat-square)](https://github.com/IodineLang/Ion)
     
+    
 You'll need to replace `modulename` in the URL and the alt text (inside the 
-square brackets after the exclamation mark).
+square brackets after the exclamation mark). This will create a beautiful 
+badge like this:
+
+[![ion install modulename](https://img.shields.io/badge/ion%20install-modulename-blue.svg?style=flat-square)](https://github.com/IodineLang/Ion)
 
 In addition, it's a wise idea to list your version prominently in the README.
 
