@@ -1,2 +1,2 @@
 #!/bin/bash
-iodine /usr/lib/iodine-ion/main.id "$@"
+iodine /usr/lib/iodine-ion/ion.id "$@"
