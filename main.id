@@ -28,7 +28,7 @@ func main (args) {
     commands ["purge-cache"] = PurgeCacheCommand ();
     commands ["purge"] = PurgeCommand ();
     
-    commands ["update"] = UpdateCommand (repoManager);
+    commands ["upgrade"] = UpgradeCommand (repoManager);
     
     commands ["help"] = HelpCommand(commands);
     
@@ -326,17 +326,17 @@ class InstallCommand : Command {
     }
 }
 
-class UpdateCommand : Command {
+class UpgradeCommand : Command {
     func UpdateCommand (self, repoManager) {
-        super ("update", "Searches for and updates all packages where " +
+        super ("upgrade", "Searches for and updates specified packages where " +
                "available");
         self.repoManager = repoManager;
     }
     
     func call (self, args, flags) {
-        if (args.getSize () != 0) {
-             print ("ion update requires no arguments. Do you mean ion " +
-                    "upgrade?");
+        if (args.getSize () != 1) {
+             print ("ion upgrade requires an argument. Do you mean ion " +
+                    "update?");
              return;
         }
         
@@ -344,7 +344,20 @@ class UpdateCommand : Command {
             LOCAL_STORE = os.searchPaths [1];
         }
         
-        print ("Not implemented.");
+        f = open ("{}/data/{}.json".format (DEFAULT_DIR, args [0]), "r");
+        conf = json.parse (f.readAllText ());
+        f.close ();
+        p = PurgeCommand ();
+        pc = PurgeCacheCommand ();
+        foreach (dep in conf ["dependencies"]) {
+            p.call (dep ["name"], list ());
+            pc.call (dep ["name"], list ());
+        }
+        p.call (args [0]);
+        pc.call (args [0]);
+        
+        i = InstallCommand (self.repoManager);
+        i.call (args [0], list ());
     }
 }
 

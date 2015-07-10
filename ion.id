@@ -1,0 +1,254 @@
+use os;
+
+use .ionlib;
+
+CONF_DIR = os.userDir + "/.ion";
+PKG_DIR = os.userDir + "/.iodinepackages";
+ION_VERSION = "v0.1.0-alpha";
+
+func main (args) {
+    commands = HashMap ();
+    
+    commands ["add-repo"] = AddRepoCommand ();
+    commands ["delete-repo"] = DeleteRepoCommand ();
+    commands ["list-repos"] = ListReposCommand ();
+    
+    commands ["search"] = SearchCommand ();
+    commands ["install"] = InstallCommand ();
+    
+    commands ["purge-cache"] = PurgeCacheCommand ();
+    commands ["purge"] = PurgeCommand ();
+    
+    commands ["upgrade"] = UpgradeCommand ();
+    
+    commands ["help"] = HelpCommand(commands);
+    
+    parameters = List ();
+    flags = List ();
+    for (i = 0; i < args.getSize (); i += 1) {
+        if (i >= 1) {
+           if (args [i].startsWith ("--")) {
+               flags.add (args [i]);
+           }
+           else {
+               parameters.add (args [i]);
+           }
+        }
+    }
+    if (flags.contains ("--global")) {
+        PKG_DIR = os.searchPaths [1];
+    }
+    try {
+        commands [args [0]].call (parameters, flags);
+    }
+    except (e as IndexException, KeyNotFoundException) {
+        print ("Unknown argument(s). Type `ion help` for help with ion.");
+    }
+}
+
+class Command {
+    func Command (self, name, helpText) {
+        self.name = name;
+        self.helpText = helpText;
+    }
+    
+    func call (self, args, flags) {
+        raise ("Call not implemented correctly in \"{}\"".format (self.name));
+    }
+}
+
+class PurgeCacheCommand : Command {
+    func PurgeCacheCommand (self) {
+        super ("purge-cache", "Purges installation files from the specified " +
+               "package's cache in .ion.");
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize () != 1) {
+            print ("ion purge-cache requires one argument.");
+            return;
+        }
+        
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        ionTools.purgeCache (args [0]);
+    }
+}
+
+class PurgeCommand : Command {
+    func PurgeCommand (self) {
+        super ("purge", "Removes all traces of the package from your local " +
+               "store and registers it as uninstalled.");
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize () != 1) {
+            print ("ion purge takes only one argument (package name)");
+        }
+        
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        print ("Uninstalling...");
+        ionTools.remove (args [0]);
+        print ("Done!");
+    }
+}
+
+class InstallCommand : Command {
+    func InstallCommand (self) {
+        super ("install", "Installs the specified package.");
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize () != 1) {
+            print ("ion install requires one argument.");
+        }
+        
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        print ("Collecting packages...");
+        pkgs = ionTools.collectPackage (args [0]); 
+        if (self._confirm (pkgs, PKG_DIR)) {
+            print ("Installing modules...");
+            ionTools._install (pkgs);
+            
+        }
+        print ("Installation successful!");
+    }
+   
+    
+    func _confirm (self, packages, dir) {
+        print ("Confirm installation of packages: ");
+        print ("-----------------");
+        names = map (packages, lambda (x) => {
+            return "{} ({})".format (x.friendlyName, x.version.versionString);
+        });
+        print (", ".join (names));
+        print ("-----------------");
+        print ("Any packages containing @ have multiple repository definitions"+
+               ", and are using the named repository.");
+        print ("");
+        print ("Packages will be installed to: {}".format (dir));
+        print ("Is this ok? (y/n)");
+        resp = input ().toLower ();
+        return resp.startsWith ("y");
+    }
+}
+
+class UpgradeCommand : Command {
+    func UpgradeCommand (self) {
+        super ("upgrade", "Searches for and updates specified packages where " +
+               "available");
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize () != 1) {
+             print ("ion upgrade requires an argument. Do you mean ion " +
+                    "update?");
+             return;
+        }
+        
+        print ("Not implemented!");
+    }
+}
+
+class AddRepoCommand : Command {
+    func AddRepoCommand (self) {
+        super ("add-repo", "Adds a repository to your repositories list.");
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize () != 2) {
+            args = List ();
+            print ("Enter repository name: ");
+            args.add (input ());
+            print ("Enter repository URL: ");
+            args.add (input ());
+        }
+        
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        ionTools.addRepo (args[0], args [1]);
+        print ("Added repository successfully.");
+    }
+}
+
+class ListReposCommand : Command {
+    func ListReposCommand (self) {
+        super ("list-repos", "Lists all repositories currently used by Ion.");
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize() > 0) {
+            print ("ion list-repos does not take any arguments.");
+            return;
+        }
+        
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        repos = ionTools.repoManager.getAllRepos ();
+        print ("Repos: ");
+        foreach (repo in repos) {
+            print ("  {}: {}".format (repo ["name"], repo ["url"]));
+        }
+    }
+}
+
+class DeleteRepoCommand : Command {
+    func DeleteRepoCommand (self) {
+        super ("delete-repo", "Deletes the specified repository from the " +
+               "repository list."); 
+    }
+    
+    func call (self, args) {
+        if (args.getSize () != 1) {
+            print ("ion delete-repo requires one argument (the repository " +
+                   "name)");
+            return;
+        }
+        
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        ionTools.repoManager.deleteRepo (args [0]);
+    }
+}
+
+class SearchCommand : Command {
+    func SearchCommand (self) {
+        super ("search", "Searches all repositories for the specified " +
+               "package.");
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize () != 1) {
+            print ("ion search requires one argument (the package to search" + 
+                   " for).");
+            return;
+        }
+        
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        results = ionTools.repoManager.searchAllRepos (args [0]);
+        print ("Found {} results.".format (results.getSize ()));
+        if (results.getSize () > 0) {
+            foreach (pkg in results) {
+                print ("{} ({}, module {})".format (pkg.friendlyName, pkg
+                       .version.versionString, pkg.data ["name"]));
+                print ("  {}".format (pkg.data ["description"]));
+                if (pkg.version.isAlpha ()) {
+                    print ("  This is an alpha module. Expect breaking changes.");
+                }  
+            }
+        }
+    }
+}
+
+
+class HelpCommand : Command {
+    func HelpCommand (self, commands) {
+        super ("help", "Shows this help message.");
+        self.commands = commands;
+    }
+    
+    func call (self, args, flags) {
+        print ("Commands:");
+        foreach (command in self.commands) {
+            cmd = self.commands[command];
+            print("  {} - {}".format(cmd.name, cmd.helpText));
+        }
+        print ("This is ion version `{}`.".format (ION_VERSION));       
+    }
+}

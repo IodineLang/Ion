@@ -1,0 +1,281 @@
+use io;
+use json;
+use os;
+use webclient;
+use ziplib;
+
+use .semver;
+
+class IonLib {
+    # pkgDir and confDir should be **full** paths to directories for storing 
+    # modules and configuration/temp data.
+    func IonLib (self, pkgDir, confDir) {
+        self.pkgDir = pkgDir;
+        self.confDir = confDir;
+        self.disableSslCheck = false;
+        self.repoManager = RepoManager ("{}/repos.json".format (confDir));
+        self.PKG_CACHE = "{}/cache".format (confDir);
+        self.PKG_DATA = "{}/data".format (confDir);
+        if (!io.Directory.exists (self.PKG_CACHE)) {
+            io.Directory.create (self.PKG_CACHE);
+        }
+        if (!io.Directory.exists (self.PKG_DATA)) {
+            io.Directory.create (self.PKG_DATA);
+        }
+    }
+    
+    func disableSecurity (self, check) {
+        self.disableSslCheck = check;
+    }
+    
+    func purgeCache (self, pkgName) {
+        try {
+            self._clean ("{}/{}".format (self.PKG_CACHE, pkgName));
+            self._clean ("{}/{}.zip".format (self.PKG_CACHE, pkgName));    
+        }
+        except (e as IOException) {
+            return;
+        }
+    }
+    
+    func remove (self, pkgName) {
+        fn = "{}/{}.json".format (self.PKG_DATA, pkgName);
+        f = open (fn, "r");
+        conf = json.parse (f.readAllText ());
+        f.close ();
+        modules = conf ["ionFile"] ["modules"];
+        foreach (module in modules) {
+            foreach (file in modules [module]) {
+                modDir = module;
+                if (module != "") {
+                    modDir += "/";
+                }
+                io.File.remove ("{}/{}{}".format (self.pkgDir, modDir, file));
+            }
+            if (module != "") {
+                io.Directory.remove ("{}/{}".format (self.pkgDir, module));
+            }
+        }
+        io.File.remove (fn);
+    }
+    
+    func _clean (self, dir) {
+        foreach (directory in io.Directory.listDirectories (dir)) {
+            self._clean (directory);
+        }
+        foreach (file in io.Directory.listFiles (dir)) {
+            io.File.remove (file);
+        }
+        
+        io.Directory.remove (dir);
+    }
+    
+    func collectPackage (self, pkgName) {
+        return self._collectPackage (pkgName, "*");        
+        
+    }
+    
+    func _collectPackage (self, pkgName, pkgVerMatch) {
+        candidates = self.repoManager.searchAllRepos (pkgName);
+        candidates = filter (candidates, lambda (candidate) => {
+            return candidate.version.isMatch (pkgVerMatch);
+        });
+        if (candidates.getSize () > 0) {
+            pkgs = List ();
+            pkgs.add (candidates [0]);
+            pkgs = pkgs + self._collectDeps (candidates [0]);
+            return pkgs;
+        }
+        raise Exception ("Could not find a suitable package in available repos"+
+                         ". Please report this to the maintainer.");
+    }
+    
+    func _collectDeps (self, package) {
+        pkgs = List ();
+        foreach (dependency in package.dependencies) {
+            pkgs = pkgs + self._collectPackage (dependency.name, 
+                   dependency.version);    
+        }
+        return pkgs;
+    }
+    
+    func install (self, pkgName) {
+        self._install (self.collectPackage (pkgName));
+    }
+    
+    # packages should be a List () of packages.
+    func _install (self, packages) {
+        foreach (pkg in packages) {
+            self._installPackage (pkg);
+        }
+    }
+    
+    func _installPackage (self, package) {
+        if (self._installed (package)) {
+            if (package.version.isMatch (self._getVersionInstalled (package))) {
+                return;
+            }
+            else {
+                raise Exception ("Incorrect version of {} installed!".format 
+                                 (package.name));
+            } 
+        }
+        loc = "{}/{}.zip".format(self.PKG_CACHE, package.data ["name"]);
+        webclient.WebClient ().downloadFile (package.data ["download"], loc);
+        ziplib.unzipToDirectory (loc, self.PKG_CACHE);
+        ionFile = open ("{}/{}/ionfile.json".format (self.PKG_CACHE, 
+                        package.data ["ionfileLocation"]), "r");
+        ionFileData = json.parse (ionFile.readAllText ());
+        ionFile.close ();
+        foreach (mod in ionFileData ["modules"]) {
+            path = "{}/{}/{}".format (self.PKG_CACHE, package.data 
+                           ["ionfileLocation"], ionFileData ["modules"] [mod]);
+            zip = "{}/{}".format (self.pkgDir, mod)
+            io.Directory.copy (path, zip);
+            files = io.Directory.listFiles (zip);
+            files = map (files, lambda (file) => {
+                res = file.split (io.Directory.separator);
+                return res [res.getSize () - 1];
+            });
+            ionFileData ["modules"] [mod] = files;
+        }                
+        package.data ["ionFile"] = ionFileData;
+        self._writeInstallationFile (package);
+    }
+    
+        
+    func _writeInstallationFile (self, package) {
+        filename = "{}/{}.json".format (self.PKG_DATA, package.data ["name"]);
+        if (io.File.exists (filename)) {
+            io.File.remove (filename);
+        }
+        f = open (filename, "w");
+        f.write (json.dump (package.data));
+        f.close ();
+    }
+    
+    func _getVersionInstalled (self, package) {
+        pkgFile = "{}/{}.json".format (self.PKG_DATA, package.data ["name"]);
+        f = open (pkgFile, "r");
+        pkgData = json.parse (f.readAllText ());
+        f.close ();
+        return pkgData ["version"];
+    }
+    
+    func _installed (self, package) {
+        pkgFile = "{}/{}.json".format (self.PKG_DATA, package.data ["name"]);
+        if (io.File.exists (pkgFile)) {
+            return true;
+        }
+        return false;
+    }
+    
+    func addRepo (self, repoName, repoUrl) {
+        self.repoManager.addRepo (repoName, repoUrl);
+    }
+    
+    func listRepos (self) {
+        return self.repoManager.getAllRepos ();
+    }
+    
+}
+
+class PackageData {
+    func PackageData (self, packageJson) {
+        self.data = json.parse (packageJson);
+        self.version = semver.SemanticVersion (self.data ["version"]);
+        self.friendlyName = self.data ["friendlyName"];
+        self.dependencies = List ();
+        foreach (dependency in self.data ["dependencies"]) {
+            self.dependencies.add (DependencyData (dependency));
+        }
+    }
+}
+
+class DependencyData {
+    # depData is a hashmap containing "name" and "version"
+    func DependencyData (self, depData) {
+        self.data = depData;
+        self.name = depData ["name"];
+        self.version = depData ["version"];
+    }
+}
+
+class RepoManager {
+    func RepoManager (self, repoConf) {
+        self.repoConfName = repoConf;
+        if (io.File.exists (repoConf)) {
+            f = open (repoConf, "r");
+            self.repoConf = json.parse (f.readAllText ());
+            f.close ();
+        }
+        else {
+            self.repoConf = List ();
+            self.addRepo ("Default", 
+                          "http://iodinelang.github.io/Ion-Default-Repo");
+        }
+    }
+    
+    func getAllRepos (self) {
+        return self.repoConf;
+    }
+    
+    func getRepo (self, repoName) {
+        repoCandidates = filter (self.repoConf, lambda (repo) => {
+            return repo ["name"] == repoName;
+        });
+        
+        if (repoCandidates.getSize () == 0) {
+            return null;
+        }
+        return repoCandidates [0];
+        
+    }
+    
+    func searchAllRepos (self, pkgName) {
+        pkgs = List ();
+        foreach (repo in self.repoConf) {
+            try {
+                pkg = webclient.WebClient ().downloadString ("{}/{}.json".format 
+                                                       (repo ["url"], pkgName));
+                pkgs.add (PackageData (pkg));
+            }
+            except (e) {
+                continue;
+            }
+        }
+        return pkgs;
+    }
+    
+    func addRepo (self, repoName, repoUrl) {
+        repo = HashMap ();
+        repo ["name"] = repoName;
+        repo ["url"] = repoUrl;
+        self.repoConf.add (repo);
+        self._writeRepoData ();
+    }
+    
+    func deleteRepo (self, repoName) {
+        res = filter (self.repoConf, lambda (x) => {
+            return x ["name"] == repoName;
+        });
+        if (res.getSize () > 0) {
+            self.repoConf.remove (res [0]);
+        }
+        self._writeRepoData ();
+    }
+    
+    func _writeRepoData (self) {
+        try {
+            io.File.remove (self.repoConfName);
+        }
+        except (e as IOException) {
+            # Ignore
+        }
+        f = open (self.repoConfName, "w");
+        f.write (json.dump (self.repoConf));
+        f.close ();
+    }
+}
+
+
