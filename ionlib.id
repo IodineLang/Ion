@@ -12,7 +12,13 @@ class IonLib {
     # modules and configuration/temp data.
     func IonLib (self, pkgDir, confDir) {
         self.pkgDir = pkgDir;
+        if (!io.Directory.exists (self.pkgDir)) {
+            io.Directory.create (self.pkgDir);
+        }
         self.confDir = confDir;
+        if (!io.Directory.exists (self.confDir)) {
+            io.Directory.create (self.confDir);
+        }
         self.disableSslCheck = false;
         self.repoManager = RepoManager ("{}/repos.json".format (confDir));
         self.PKG_CACHE = "{}/cache".format (confDir);
