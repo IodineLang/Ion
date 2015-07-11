@@ -1,3 +1,4 @@
+use hash;
 use io;
 use json;
 use os;
@@ -28,10 +29,10 @@ class IonLib {
         self.disableSslCheck = check;
     }
     
-    func purgeCache (self, pkgName) {
+    func purgeCache (self) {
         try {
-            self._clean ("{}/{}".format (self.PKG_CACHE, pkgName));
-            self._clean ("{}/{}.zip".format (self.PKG_CACHE, pkgName));    
+            self._clean (self.PKG_CACHE);
+            io.Directory.create (self.PKG_CACHE);
         }
         except (e as IOException) {
             return;
@@ -120,8 +121,17 @@ class IonLib {
                                  (package.name));
             } 
         }
+        self.purgeCache ();
         loc = "{}/{}.zip".format(self.PKG_CACHE, package.data ["name"]);
         webclient.WebClient ().downloadFile (package.data ["download"], loc);
+        if (package.data ["verifyHash"]) {
+            f = open (loc, "r");
+            sha = Str (hash.sha1 (f));
+            if (sha != package.data ["sha1"]) {
+               raise Exception ("Invalid sha1 hash (expected {}, got {})."
+                                .format (package.data ["sha1"], sha));
+            }
+        }
         ziplib.unzipToDirectory (loc, self.PKG_CACHE);
         ionFile = open ("{}/{}/ionfile.json".format (self.PKG_CACHE, 
                         package.data ["ionfileLocation"]), "r");
@@ -178,6 +188,16 @@ class IonLib {
         return self.repoManager.getAllRepos ();
     }
     
+    func listPackages (self) {
+        pkgs = List ();
+        foreach (pkg in io.Directory.listFiles (self.PKG_DATA)) {
+            f = open (pkg, "r");
+            pkgData = json.parse (f.readAllText ());
+            f.close ();
+            pkgs.add (pkgData);
+        }
+        return pkgs;
+    }
 }
 
 class PackageData {

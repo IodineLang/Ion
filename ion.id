@@ -15,11 +15,11 @@ func main (args) {
     
     commands ["search"] = SearchCommand ();
     commands ["install"] = InstallCommand ();
+    commands ["list-packages"] = ListPackagesCommand ();
+    commands ["upgrade"] = UpgradeCommand ();
     
     commands ["purge-cache"] = PurgeCacheCommand ();
     commands ["purge"] = PurgeCommand ();
-    
-    commands ["upgrade"] = UpgradeCommand ();
     
     commands ["help"] = HelpCommand(commands);
     
@@ -64,13 +64,13 @@ class PurgeCacheCommand : Command {
     }
     
     func call (self, args, flags) {
-        if (args.getSize () != 1) {
-            print ("ion purge-cache requires one argument.");
+        if (args.getSize () != 0) {
+            print ("ion purge-cache does not require an argument.");
             return;
         }
         
         ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        ionTools.purgeCache (args [0]);
+        ionTools.purgeCache ();
     }
 }
 
@@ -146,6 +146,31 @@ class UpgradeCommand : Command {
         }
         
         print ("Not implemented!");
+    }
+}
+
+class ListPackagesCommand : Command {
+    func UpgradeCommand (self) {
+        super ("list-packages", "Lists all installed packages for the " +
+               "specified location (global or local).");
+    }
+    
+    func call (self, args, flags) {
+        if (args.getSize () != 0) {
+             print ("ion list-packages does not take an argument.");
+             return;
+        }
+        
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        print ("Packages: ");
+        foreach (pkg in ionTools.listPackages ()) {
+            print ("  {} (version {})".format (pkg ["name"], pkg ["version"]));
+            print ("    Dependencies: ");
+            foreach (dep in pkg ["dependencies"]) {
+                print ("{} (version {})".format (dep ["name"], dep ["version"]));
+            }
+        }
+        print ("Too many results? Try `ion list-packages | less`");
     }
 }
 
