@@ -60,9 +60,24 @@ like this (at a terminal):
 TODO.
 
 ### Using Ion
+#### Package Mode
+There are three main packages modes that you can install your packages to:
+- `--local`, which installs packages and installation data to the current working directory (all users can access this, but
+it isn't neat and can overwrite your stuff)
+- `--global`, which installs to the Iodine `modules/` directory (all users can access this)
+- No flag, which installs to the `.ion` folder in your home/user directory (only you can access this).
+
+You'll probably need root/administrator privileges to use `--global`. Most commands will work with these flags and produce different output. If a library is defined in multiple locations, the priority order is:
+
+- Local
+- Global
+- .ion
+
+Keep this in mind if you anticipate conflicts.
+
 #### Installing a module
 
-    ion install [--global] module
+    ion install module
     
 If you use the global flag, the module will be available to all users. You'll 
 probably need root access (e.g. `sudo`) to run that, though. If you run it 
@@ -70,7 +85,7 @@ without the global flag, only you will be able to access the module.
 
 #### Removing a module
 
-    ion purge [--global] module
+    ion remove module
     
 #### Getting help
 
