@@ -86,9 +86,30 @@ class PurgeCommand : Command {
         }
         
         ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        print ("Uninstalling...");
-        ionTools.remove (args [0]);
+        print ("Collecting dependencies...");
+        deps = ionTools._findDeps (args [0]);
+        if (self._confirm (deps)) {
+            print ("Uninstalling...");
+            ionTools._remove (deps);
+        }
         print ("Done!");
+    }
+    
+    func _confirm (self, pkgs) {
+        names = map (pkgs, lambda (pkg) => {
+            return "{} ({})".format (pkg.friendlyName, 
+                   pkg.version.versionString);
+        });
+        print ("The following packages will be removed:");
+        print ("---------------");
+        print (" ".join (names));
+        print ("---------------");
+        print ("Is this ok? (y/n)");
+        ok = input ();
+        if (ok.startsWith ("y")) {
+            return true;
+        }
+        return false;
     }
 }
 
@@ -165,9 +186,13 @@ class ListPackagesCommand : Command {
         print ("Packages: ");
         foreach (pkg in ionTools.listPackages ()) {
             print ("  {} (version {})".format (pkg ["name"], pkg ["version"]));
-            print ("    Dependencies: ");
-            foreach (dep in pkg ["dependencies"]) {
-                print ("{} (version {})".format (dep ["name"], dep ["version"]));
+            deps = pkg ["dependencies"];
+            if (deps.getSize () > 0) {
+                print ("  - Dependencies: ");
+                foreach (dep in deps) {
+                    print ("    - {} (version {})".format (dep ["name"], 
+                           dep ["version"]));
+                }
             }
         }
         print ("Too many results? Try `ion list-packages | less`");

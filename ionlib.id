@@ -39,12 +39,47 @@ class IonLib {
         }
     }
     
-    func remove (self, pkgName) {
+    func _findDeps (self, pkgName) {
         fn = "{}/{}.json".format (self.PKG_DATA, pkgName);
         f = open (fn, "r");
         conf = json.parse (f.readAllText ());
         f.close ();
-        modules = conf ["ionFile"] ["modules"];
+        
+        pkgs = self._listPackages ();
+        pkgs = map (pkgs, lambda (x) => {
+            return PackageData (x);
+        });
+        pkgsToRemove = List ();
+        
+        foreach (pkg in pkgs) {
+            foreach (dep in pkg.dependencies) {
+                if (dep.name == pkgName) {
+                    pkgsToRemove.add (pkg);
+                }
+            }
+            
+            if (pkg.data ["name"] == pkgName) {
+                pkgsToRemove.add (pkg);
+            }
+            
+        }
+        return pkgsToRemove;
+    }
+    
+    func remove (self, pkgName) {     
+        pkgs = self._findDeps (pkgName);
+        self._remove (pkgs);
+        
+    }
+    
+    func _remove (self, pkgs) {
+        foreach (pkg in pkgs) {
+            self.__remove (pkg);
+        }
+    }
+    
+    func __remove (self, pkg) {
+        modules = pkg.data ["ionFile"] ["modules"];
         foreach (module in modules) {
             foreach (file in modules [module]) {
                 modDir = module;
@@ -57,7 +92,7 @@ class IonLib {
                 io.Directory.remove ("{}/{}".format (self.pkgDir, module));
             }
         }
-        io.File.remove (fn);
+        io.File.remove ("{}/{}.json".format (self.PKG_DATA, pkg.data ["name"]));
     }
     
     func _clean (self, dir) {
@@ -189,10 +224,17 @@ class IonLib {
     }
     
     func listPackages (self) {
+        pkgs = map (self._listPackages (), lambda (pkg) => {
+            return json.parse (pkg);
+        });
+        return pkgs;
+    }
+    
+    func _listPackages (self) {
         pkgs = List ();
         foreach (pkg in io.Directory.listFiles (self.PKG_DATA)) {
             f = open (pkg, "r");
-            pkgData = json.parse (f.readAllText ());
+            pkgData = f.readAllText ();
             f.close ();
             pkgs.add (pkgData);
         }
