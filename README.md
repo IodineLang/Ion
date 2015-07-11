@@ -4,6 +4,17 @@ manually copy projects and include them in your `modules/` directory; Ion takes
 care of that automatically, so you can focus on running the programs you want 
 while still having access to powerful libraries.
 
+## Found a bug?
+First, identify where the issue is. Then, click the relevant link below and log an issue.
+
+### [A package from the default repo won't install properly.](https://github.com/IodineLang/Ion-Default-Repo/issues)
+
+### [Ion crashes or shows an error message.](https://github.com/IodineLang/Ion/issues)
+
+### [Modules don't install correctly.](https://github.com/IodineLang/Ion/issues)
+
+### [Other issue.](https://github.com/IodineLang/Ion/issues)
+
 ## For Developers
 Want to add your project to the Ion default repository? [Create a request here]
 (https://github.com/IodineLang/Ion-Default-Repo/issues) in the following format:
