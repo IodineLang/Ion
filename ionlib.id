@@ -146,6 +146,39 @@ class IonLib {
         }
     }
     
+    func _readFromFile (self, fileName) {
+        f = open (fileName, "r");
+        data = json.parse (f.readAllText ());
+        f.close ();
+        return data;
+    }
+    
+    func installFromFile (self, fileName) {
+        data = self._readFromFile (fileName);
+        reqs = data ["requirements"];
+        pkgs = List ();
+        foreach (req in reqs) {
+            pkgs += self._collectPackage (req, reqs [req]);
+        }
+        self._install (pkgs);
+        return pkgs;
+    }
+    
+    func writeInstallToFile (self, fileName, pkg) {
+        data = null;
+        try {
+            data = self._readFromFile (fileName);
+        }
+        except (e as IOException) {
+            data = HashMap ();
+            data ["requirements"] = HashMap ();
+        }
+        data ["requirements"] [pkg.data ["name"]] = pkg.version.versionString;
+        f = open (fileName, "w");
+        f.write (json.dump (data));
+        f.close ();
+    }
+    
     func _installPackage (self, package) {
         if (self._installed (package)) {
             if (package.version.isMatch (self._getVersionInstalled (package))) {

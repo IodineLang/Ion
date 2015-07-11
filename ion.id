@@ -119,17 +119,31 @@ class InstallCommand : Command {
     }
     
     func call (self, args, flags) {
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        
+        if (flags.contains ("--conf")) {
+            pkgs = ionTools.installFromFile ("./ionconf.json");
+            pkgNames = map (pkgs, lambda (pkg) => {
+                return "{} ({})".format (pkg.friendlyName, pkg.data ["name"]);
+            });
+            print ("Installed packages: {}".format (", ".join (pkgNames)));
+            return;
+        }
+        
         if (args.getSize () != 1) {
             print ("ion install requires one argument.");
         }
         
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
         print ("Collecting packages...");
         pkgs = ionTools.collectPackage (args [0]); 
         if (self._confirm (pkgs, PKG_DIR)) {
             print ("Installing modules...");
             ionTools._install (pkgs);
-            
+            if (flags.contains ("--save")) {
+                foreach (pkg in pkgs) {
+                    ionTools.writeInstallToFile ("./ionconf.json", pkg);
+                }
+            }
         }
         print ("Installation successful!");
     }
