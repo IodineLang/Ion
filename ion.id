@@ -19,7 +19,7 @@ func main (args) {
     commands ["upgrade"] = UpgradeCommand ();
     
     commands ["purge-cache"] = PurgeCacheCommand ();
-    commands ["purge"] = PurgeCommand ();
+    commands ["remove"] = RemoveCommand ();
     
     commands ["help"] = HelpCommand(commands);
     
@@ -74,15 +74,15 @@ class PurgeCacheCommand : Command {
     }
 }
 
-class PurgeCommand : Command {
-    func PurgeCommand (self) {
-        super ("purge", "Removes all traces of the package from your local " +
+class RemoveCommand : Command {
+    func RemoveCommand (self) {
+        super ("remove", "Removes all traces of the package from your local " +
                "store and registers it as uninstalled.");
     }
     
     func call (self, args, flags) {
         if (args.getSize () != 1) {
-            print ("ion purge takes only one argument (package name)");
+            print ("ion remove takes only one argument (package name)");
         }
         
         ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
