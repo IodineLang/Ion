@@ -39,6 +39,7 @@ func main (args) {
     }
     if (flags.contains ("--global")) {
         PKG_DIR = sys.path [1];
+        CONF_DIR = sys.path [1] + "/ion/";
     }
     else if (flags.contains ("--local")) {
         PKG_DIR = ".";
