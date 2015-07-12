@@ -63,7 +63,7 @@ TODO.
 #### Package Mode
 There are three main packages modes that you can install your packages to:
 - `--local`, which installs packages and installation data to the current working directory (all users can access this, but
-it isn't neat and can overwrite your stuff)
+only the project in the current directory can access this)
 - `--global`, which installs to the Iodine `modules/` directory (all users can access this)
 - No flag, which installs to the `.ion` folder in your home/user directory (only you can access this).
 
