@@ -218,7 +218,7 @@ class IonLib {
             io.Directory.copy (path, zip);
             files = io.Directory.listFiles (zip);
             files = map (files, lambda (file) => {
-                res = file.split (io.Directory.separator);
+                res = file.split ("/");
                 return res [res.getSize () - 1];
             });
             ionFileData ["modules"] [mod] = files;
