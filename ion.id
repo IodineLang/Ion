@@ -1,5 +1,6 @@
 use io;
 use os;
+use sys;
 
 use .ionlib;
 
@@ -37,7 +38,7 @@ func main (args) {
         }
     }
     if (flags.contains ("--global")) {
-        PKG_DIR = os.searchPaths [1];
+        PKG_DIR = sys.path [1];
     }
     else if (flags.contains ("--local")) {
         PKG_DIR = ".";
