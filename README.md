@@ -115,5 +115,10 @@ If you run `add-repo` without arguments, an interactive wizard will be shown.
 #### Deleting a repository
 
     ion delete-repo name
-    
+
+
 If necessary, find the name from `list-repos`.
+#### Upgrading packages
+
+    ion update
+    

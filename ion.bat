@@ -1,2 +1,2 @@
 @echo off
-iodine main.id %*
+iodine ion.id %*
