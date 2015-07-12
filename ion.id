@@ -190,7 +190,7 @@ class UpgradeCommand : Command {
 }
 
 class ListPackagesCommand : Command {
-    func UpgradeCommand (self) {
+    func ListPackagesCommand (self) {
         super ("list-packages", "Lists all installed packages for the " +
                "specified location (global or local).");
     }
