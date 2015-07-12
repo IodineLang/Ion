@@ -279,6 +279,50 @@ class IonLib {
         }
         return pkgs;
     }
+    
+    func upgradePackages (self) {
+        pkgs = map (self._listPackages (), lambda (pkg) => {
+            return PackageData (pkg);
+        });
+        
+        removes = List ();
+        upgrades = List ();
+        foreach (pkg in pkgs) {
+            upgradeOpts = self.repoManager.searchAllRepos (pkg.data ["name"]);
+            upgradeOpts = filter (upgradeOpts, lambda (x) => {
+                return pkg.version.isLessThan (x.version.versionString);
+            });
+            
+            if (upgradeOpts.getSize () != 0) {
+                upgrades.add (upgradeOpts [0]);
+                removes.add (pkg);
+            }
+        }
+        
+        foreach (pkg in upgrades) {
+            foreach (cPkg in pkgs) {
+                deps = filter (cPkg.dependencies, lambda (dep) => {
+                    return dep.name == pkg.data ["name"];
+                });
+                
+                if (deps.getSize () > 0) {
+                    incompatibleDeps = filter (deps, lambda (dep) => {
+                        return !pkg.version.isMatch (dep.version);
+                    });
+                    if (incompatibleDeps.getSize () > 0) {
+                        raise Exception ("Upgrade failed. Package {} is " +
+                                   "incompatible with {} (requires version {})"
+                                   .format (pkg.friendlyName, cPkg.friendlyName,
+                                            dep.version));
+                    }
+                }
+            }
+        }
+        
+        self._remove (removes);
+        self._install (upgrades);
+    }
+    
 }
 
 class PackageData {

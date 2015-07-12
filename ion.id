@@ -17,7 +17,7 @@ func main (args) {
     commands ["search"] = SearchCommand ();
     commands ["install"] = InstallCommand ();
     commands ["list-packages"] = ListPackagesCommand ();
-    commands ["upgrade"] = UpgradeCommand ();
+    commands ["update"] = UpdateCommand ();
     
     commands ["purge-cache"] = PurgeCacheCommand ();
     commands ["remove"] = RemoveCommand ();
@@ -172,20 +172,20 @@ class InstallCommand : Command {
     }
 }
 
-class UpgradeCommand : Command {
-    func UpgradeCommand (self) {
-        super ("upgrade", "Searches for and updates specified packages where " +
+class UpdateCommand : Command {
+    func UpdateCommand (self) {
+        super ("update", "Searches for and updates specified packages where " +
                "available");
     }
     
     func call (self, args, flags) {
-        if (args.getSize () != 1) {
-             print ("ion upgrade requires an argument. Do you mean ion " +
-                    "update?");
+        if (args.getSize () != 0) {
+             print ("ion upgrade takes no arguments.");
              return;
         }
         
-        print ("Not implemented!");
+        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
+        ionTools.upgradePackages ();
     }
 }
 
@@ -320,4 +320,4 @@ class HelpCommand : Command {
         }
         print ("This is ion version `{}`.".format (ION_VERSION));       
     }
-}
+}   
