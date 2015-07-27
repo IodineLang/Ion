@@ -1,5 +1,7 @@
 # Ion
-[**Downloads**](https://github.com/IodineLang/Ion/releases). *Please* read the first few paragraphs of this readme first though!
+## [**Downloads**](https://github.com/IodineLang/Ion/releases)
+
+*Please* read the first few paragraphs of this readme first though!
 
 
 Ion is *the* package manager for Iodine projects. Never again will you have to
