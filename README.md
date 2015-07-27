@@ -1,4 +1,7 @@
 # Ion
+[**Downloads**](https://github.com/IodineLang/Ion/releases). *Please* read the first few paragraphs of this readme first though!
+
+
 Ion is *the* package manager for Iodine projects. Never again will you have to
 manually copy projects and include them in your `modules/` directory; Ion takes
 care of that automatically, so you can focus on running the programs you want 
