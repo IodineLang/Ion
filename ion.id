@@ -2,7 +2,7 @@ use io;
 use os;
 use sys;
 
-use .ionlib;
+use . ionlib;
 
 CONF_DIR = os.userDir + "/.ion";
 PKG_DIR = os.userDir + "/.iodinepackages";
@@ -23,7 +23,7 @@ func main (args) {
     commands ["purge-cache"] = PurgeCacheCommand ();
     commands ["remove"] = RemoveCommand ();
     
-    commands ["help"] = HelpCommand(commands);
+    commands ["help"] = HelpCommand (commands);
     
     parameters = List ();
     flags = List ();
@@ -49,6 +49,7 @@ func main (args) {
         commands [args [0]].call (parameters, flags);
     }
     except (e as IndexException, KeyNotFoundException) {
+		print (e.stackTrace);
         print ("Unknown argument(s). Type `ion help` for help with ion.");
     }
 }
@@ -60,7 +61,7 @@ class Command {
     }
     
     func call (self, args, flags) {
-        raise ("Call not implemented correctly in \"{}\"".format (self.name));
+        raise Exception ("Call not implemented correctly in \"{}\"".format (self.name));
     }
 }
 

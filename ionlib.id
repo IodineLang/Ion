@@ -102,10 +102,10 @@ class IonLib {
     }
     
     func _clean (self, dir) {
-        foreach (directory in io.Directory.listDirectories (dir)) {
+        foreach (directory in io.Directory.getDirectories (dir)) {
             self._clean (directory);
         }
-        foreach (file in io.Directory.listFiles (dir)) {
+        foreach (file in io.Directory.getFiles (dir)) {
             io.File.remove (file);
         }
         
@@ -216,7 +216,7 @@ class IonLib {
                            ["ionfileLocation"], ionFileData ["modules"] [mod]);
             zip = "{}/{}".format (self.pkgDir, mod)
             io.Directory.copy (path, zip);
-            files = io.Directory.listFiles (zip);
+            files = io.Directory.getFiles (zip);
             files = map (files, lambda (file) => {
                 res = file.split ("/");
                 return res [res.getSize () - 1];
@@ -271,7 +271,7 @@ class IonLib {
     
     func _listPackages (self) {
         pkgs = List ();
-        foreach (pkg in io.Directory.listFiles (self.PKG_DATA)) {
+        foreach (pkg in io.Directory.getFiles (self.PKG_DATA)) {
             f = open (pkg, "r");
             pkgData = f.readAllText ();
             f.close ();
@@ -386,6 +386,7 @@ class RepoManager {
                 pkgs.add (PackageData (pkg));
             }
             except (e) {
+                print (e.stackTrace);
                 continue;
             }
         }

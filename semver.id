@@ -16,7 +16,7 @@ class SemanticVersion {
                                        argList [3]);
         }
         else {
-            raise ("Argument exception!");
+            raise ArgumentException (1);
         }
     }
     
