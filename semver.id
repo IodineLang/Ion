@@ -2,7 +2,7 @@
 ## Licensed under the MIT License.
 
 class SemanticVersion {
-    func SemanticVersion (self, params args) {
+    func SemanticVersion (self, *args) {
         if (args.getSize () == 1) {
             self.versionString = args [0];
             self._parseVersionString ();
