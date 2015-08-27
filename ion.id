@@ -1,326 +1,192 @@
 use io;
-use os;
-use sys;
+use json;
+use SemanticVersion from semver;
+use WebClient from webclient;
+use ziplib;
 
-use . ionlib;
+VERSION = 'v0.1.0';
+REPO = 'http://iodinelang.github.io/Ion-Default-Repo/stylesheets';
 
-CONF_DIR = os.userDir + "/.ion";
-PKG_DIR = os.userDir + "/.iodinepackages";
-ION_VERSION = "v0.1.0-alpha";
-
-func main (args) {
-    commands = HashMap ();
-    
-    commands ["add-repo"] = AddRepoCommand ();
-    commands ["delete-repo"] = DeleteRepoCommand ();
-    commands ["list-repos"] = ListReposCommand ();
-    
-    commands ["search"] = SearchCommand ();
-    commands ["install"] = InstallCommand ();
-    commands ["list-packages"] = ListPackagesCommand ();
-    commands ["update"] = UpdateCommand ();
-    
-    commands ["purge-cache"] = PurgeCacheCommand ();
-    commands ["remove"] = RemoveCommand ();
-    
-    commands ["help"] = HelpCommand (commands);
-    
-    parameters = List ();
-    flags = List ();
-    for (i = 0; i < args.getSize (); i += 1) {
-        if (i >= 1) {
-           if (args [i].startsWith ("--")) {
-               flags.add (args [i]);
-           }
-           else {
-               parameters.add (args [i]);
-           }
-        }
-    }
-    if (flags.contains ("--global")) {
-        PKG_DIR = sys.path [1];
-        CONF_DIR = sys.path [1] + "/ion/";
-    }
-    else if (flags.contains ("--local")) {
-        PKG_DIR = ".";
-        CONF_DIR = "./ion_data";
-    }
-    try {
-        commands [args [0]].call (parameters, flags);
-    }
-    except (e as IndexException, KeyNotFoundException) {
-		print (e.stackTrace);
-        print ("Unknown argument(s). Type `ion help` for help with ion.");
-    }
-}
-
-class Command {
-    func Command (self, name, helpText) {
-        self.name = name;
-        self.helpText = helpText;
-    }
-    
-    func call (self, args, flags) {
-        raise Exception ("Call not implemented correctly in \"{}\"".format (self.name));
-    }
-}
-
-class PurgeCacheCommand : Command {
-    func PurgeCacheCommand (self) {
-        super ("purge-cache", "Purges installation files from the specified " +
-               "package's cache in .ion.");
-    }
-    
-    func call (self, args, flags) {
-        if (args.getSize () != 0) {
-            print ("ion purge-cache does not require an argument.");
-            return;
-        }
-        
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        ionTools.purgeCache ();
-    }
-}
-
-class RemoveCommand : Command {
-    func RemoveCommand (self) {
-        super ("remove", "Removes all traces of the package from your local " +
-               "store and registers it as uninstalled.");
-    }
-    
-    func call (self, args, flags) {
-        if (args.getSize () != 1) {
-            print ("ion remove takes only one argument (package name)");
-        }
-        
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        print ("Collecting dependencies...");
-        deps = ionTools._findDeps (args [0]);
-        if (self._confirm (deps)) {
-            print ("Uninstalling...");
-            ionTools._remove (deps);
-        }
-        print ("Done!");
-    }
-    
-    func _confirm (self, pkgs) {
-        names = map (pkgs, lambda (pkg) => {
-            return "{} ({})".format (pkg.friendlyName, 
-                   pkg.version.versionString);
-        });
-        print ("The following packages will be removed:");
-        print ("---------------");
-        print (" ".join (names));
-        print ("---------------");
-        print ("Is this ok? (y/n)");
-        ok = input ();
-        if (ok.startsWith ("y")) {
-            return true;
-        }
-        return false;
-    }
-}
-
-class InstallCommand : Command {
-    func InstallCommand (self) {
-        super ("install", "Installs the specified package.");
-    }
-    
-    func call (self, args, flags) {
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        
-        if (flags.contains ("--conf")) {
-            pkgs = ionTools.installFromFile ("./ionconf.json");
-            pkgNames = map (pkgs, lambda (pkg) => {
-                return "{} ({})".format (pkg.friendlyName, pkg.data ["name"]);
-            });
-            print ("Installed packages: {}".format (", ".join (pkgNames)));
-            return;
-        }
-        
-        if (args.getSize () != 1) {
-            print ("ion install requires one argument.");
-        }
-        
-        print ("Collecting packages...");
-        pkgs = ionTools.collectPackage (args [0]); 
-        if (self._confirm (pkgs, PKG_DIR)) {
-            print ("Installing modules...");
-            ionTools._install (pkgs);
-            if (flags.contains ("--save")) {
-                foreach (pkg in pkgs) {
-                    ionTools.writeInstallToFile ("./ionconf.json", pkg);
-                }
-            }
-        }
-        print ("Installation successful!");
-    }
-   
-    
-    func _confirm (self, packages, dir) {
-        print ("Confirm installation of packages: ");
-        print ("-----------------");
-        names = map (packages, lambda (x) => {
-            return "{} ({})".format (x.friendlyName, x.version.versionString);
-        });
-        print (", ".join (names));
-        print ("-----------------");
-        print ("Any packages containing @ have multiple repository definitions"+
-               ", and are using the named repository.");
-        print ("");
-        print ("Packages will be installed to: {}".format (dir));
-        print ("Is this ok? (y/n)");
-        resp = input ().toLower ();
-        return resp.startsWith ("y");
-    }
-}
-
-class UpdateCommand : Command {
-    func UpdateCommand (self) {
-        super ("update", "Searches for and updates specified packages where " +
-               "available");
-    }
-    
-    func call (self, args, flags) {
-        if (args.getSize () != 0) {
-             print ("ion upgrade takes no arguments.");
-             return;
-        }
-        
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        ionTools.upgradePackages ();
-    }
-}
-
-class ListPackagesCommand : Command {
-    func ListPackagesCommand (self) {
-        super ("list-packages", "Lists all installed packages for the " +
-               "specified location (global or local).");
-    }
-    
-    func call (self, args, flags) {
-        if (args.getSize () != 0) {
-             print ("ion list-packages does not take an argument.");
-             return;
-        }
-        
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        print ("Packages: ");
-        foreach (pkg in ionTools.listPackages ()) {
-            print ("  {} (version {})".format (pkg ["name"], pkg ["version"]));
-            deps = pkg ["dependencies"];
-            if (deps.getSize () > 0) {
-                print ("  - Dependencies: ");
-                foreach (dep in deps) {
-                    print ("    - {} (version {})".format (dep ["name"], 
-                           dep ["version"]));
-                }
-            }
-        }
-        print ("Too many results? Try `ion list-packages | less`");
-    }
-}
-
-class AddRepoCommand : Command {
-    func AddRepoCommand (self) {
-        super ("add-repo", "Adds a repository to your repositories list.");
-    }
-    
-    func call (self, args, flags) {
-        if (args.getSize () != 2) {
-            args = List ();
-            print ("Enter repository name: ");
-            args.add (input ());
-            print ("Enter repository URL: ");
-            args.add (input ());
-        }
-        
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        ionTools.addRepo (args[0], args [1]);
-        print ("Added repository successfully.");
-    }
-}
-
-class ListReposCommand : Command {
-    func ListReposCommand (self) {
-        super ("list-repos", "Lists all repositories currently used by Ion.");
-    }
-    
-    func call (self, args, flags) {
+class Installer {
+    func Installer(self, package, *args) {
+        self.location = './.deps';
+        self.package = package;
+        self.dependencyResolver = DependencyResolver(package);
         if (args.getSize() > 0) {
-            print ("ion list-repos does not take any arguments.");
-            return;
-        }
-        
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        repos = ionTools.repoManager.getAllRepos ();
-        print ("Repos: ");
-        foreach (repo in repos) {
-            print ("  {}: {}".format (repo ["name"], repo ["url"]));
+            self.dependencyResolver = args[0];
         }
     }
-}
 
-class DeleteRepoCommand : Command {
-    func DeleteRepoCommand (self) {
-        super ("delete-repo", "Deletes the specified repository from the " +
-               "repository list."); 
-    }
-    
-    func call (self, args) {
-        if (args.getSize () != 1) {
-            print ("ion delete-repo requires one argument (the repository " +
-                   "name)");
-            return;
+    func install(self, *args) {
+        version = '*';
+        if (args.getSize() == 1) {
+            version = args[0];
         }
-        
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        ionTools.repoManager.deleteRepo (args [0]);
-    }
-}
 
-class SearchCommand : Command {
-    func SearchCommand (self) {
-        super ("search", "Searches all repositories for the specified " +
-               "package.");
-    }
-    
-    func call (self, args, flags) {
-        if (args.getSize () != 1) {
-            print ("ion search requires one argument (the package to search" + 
-                   " for).");
-            return;
-        }
-        
-        ionTools = ionlib.IonLib (PKG_DIR, CONF_DIR);
-        results = ionTools.repoManager.searchAllRepos (args [0]);
-        print ("Found {} results.".format (results.getSize ()));
-        if (results.getSize () > 0) {
-            foreach (pkg in results) {
-                print ("{} ({}, module {})".format (pkg.friendlyName, pkg
-                       .version.versionString, pkg.data ["name"]));
-                print ("  {}".format (pkg.data ["description"]));
-                if (pkg.version.isAlpha ()) {
-                    print ("  This is an alpha module. Expect breaking changes.");
-                }  
+        toInstall = self.dependencyResolver.resolve(version);
+
+        # This will contain all package info (for use when unpacking)
+        data = {};
+        # Chosen versions are stored here (so installations don't half-occur)
+        chosenVersion = {};
+
+        foreach (pkg in toInstall) {
+            data[pkg] = self.fetch(pkg);
+            foreach (version in data[pkg]['versions']) {
+                _sv = SemanticVersion(version);
+                reject = false;
+                foreach (reqVersion in toInstall[pkg]) {
+                    if (!_sv.isMatch(reqVersion)) {
+                        reject = true;
+                        break;
+                    }
+                }
+
+                if (!reject) {
+                    chosenVersion[pkg] = version;
+                    break;
+                }
+            }
+
+            if (!chosenVersion.contains(pkg)) {
+                raise PackageMismatchException(pkg);
             }
         }
+
+        # Actually install the packages
+        self._installToDisk(data, chosenVersion);
+        return chosenVersion;
+    }
+
+    func _installToDisk(self, data, chosenVersion) {
+        if (!io.Directory.exists(self.location)) {
+            io.Directory.create(self.location);
+        }
+
+        cacheDir = '{}/cache'.format(self.location);
+        if (!io.Directory.exists(cacheDir)) {
+            io.Directory.create(cacheDir);
+        }
+
+        dataDir = '{}/data'.format(self.location);
+        if (!io.Directory.exists(dataDir)) {
+            io.Directory.create(dataDir);
+        }
+
+        foreach (pkg in chosenVersion) {
+            version = chosenVersion[pkg];
+            pkgVerData = data[pkg]['versions'][version];
+            src = pkgVerData['download'];
+            zipLoc = '{}/{}-{}.zip'.format(cacheDir, pkg, version);
+            WebClient().downloadFile(src, zipLoc);
+
+            ziplib.unzipToDirectory(zipLoc, cacheDir);
+            zipDest = '{}/{}'.format(cacheDir, pkgVerData['ionfileLocation']);
+            ionLoc = '{}/ionfile.json'.format(zipDest);
+            ionData = json.parse(open(ionLoc, 'r').readAllText());
+            sources = ionData['sources'];
+            foreach (source in sources) {
+                _loc = '{}/{}'.format(zipDest, source);
+                files = [];
+                foreach (dir in io.Directory.getDirectories(_loc)) {
+                    foreach (file in io.Directory.getFiles(_loc)) {
+                        files.add(file.replace(_loc, '').substr(1));
+                    }
+                }
+
+                foreach (file in io.Directory.getFiles(_loc)) {
+                    files.add(file.replace(_loc, '').substr(1));
+                }
+
+                io.Directory.copy(_loc, self.location);
+                
+                open('{}/{}.json'.format(dataDir, pkg), 'w').write(json.dump({
+                    'files': files
+                }));
+            }
+            self._rmrf(zipDest);
+        }
+
+        self._rmrf(cacheDir);
+    }
+
+    func _rmrf(self, loc) {
+        foreach (file in io.Directory.getFiles(loc)) {
+            io.File.remove(file);
+        }
+
+        foreach (dir in io.Directory.getDirectories(loc)) {
+            self._rmrf(dir);
+        }
+        io.Directory.remove(loc);
+    }
+
+
+    func fetch(self, pkg) {
+        loc = '{}/{}.json'.format(REPO, pkg);
+        print('GET ' + loc);
+        return json.parse(WebClient().downloadString(loc));
     }
 }
 
+class DependencyResolver {
+    func DependencyResolver(self, package) {
+        self.package = package;
+    }
 
-class HelpCommand : Command {
-    func HelpCommand (self, commands) {
-        super ("help", "Shows this help message.");
-        self.commands = commands;
+    func fetch(self) {
+        loc = '{}/{}.json'.format(REPO, self.package);
+        print('GET ' + loc);
+        return json.parse(WebClient().downloadString(loc));
     }
-    
-    func call (self, args, flags) {
-        print ("Commands:");
-        foreach (command in self.commands) {
-            cmd = self.commands[command];
-            print("  {} - {}".format(cmd.name, cmd.helpText));
+
+    func resolve(self, *args) {
+        # resolve collects a list of dependencies to fetch with version
+        # constraints.
+        versions = ['*'];
+        if (args.getSize() > 0) {
+            # args appears to be a tuple.
+            versions = [];
+            foreach (arg in args) {
+                versions.add(arg);
+            }
         }
-        print ("This is ion version `{}`.".format (ION_VERSION));       
+        # All dependencies are collected in toInstall
+        toInstall = {};
+
+        pkg = self.fetch();
+
+        dependencies = pkg['dependencies'];
+
+        # Key is package name, value is version
+        foreach (dep in dependencies) {
+            _deps = DependencyResolver(dep).resolve(dependencies[dep]);
+            toInstall = self._join(toInstall, _deps);
+        }
+
+        toInstall = self._join(toInstall, {self.package: versions});
+        return toInstall;
     }
-}   
+
+    func _join(self, base, toJoin) {
+        # Joins two dependency chains. Gives up if versions conflict.
+        foreach (dep in toJoin) {
+            if (!base.contains(dep)) {
+                # Create a 1-list of version constraints.
+                base[dep] = toJoin[dep];
+            } else {
+                foreach (_newDep in toJoin[dep]) {
+                    base[dep].add(_newDep);
+                }
+            }
+        }
+
+        return base;
+    }
+}
+
+class PackageMismatchException : Exception {
+    func PackageMismatchException(self, package) {
+        super('Could not continue - cannot install {}!'.format(package));
+    }
+}
