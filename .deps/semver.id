@@ -1,4 +1,4 @@
-## semver v0.2.1 (available at https://github.com/iodinelang/semver)
+## semver v0.2.2 (available at https://github.com/iodinelang/semver)
 ## Licensed under the MIT License.
 
 class SemanticVersion {
@@ -12,30 +12,30 @@ class SemanticVersion {
             while (argList.getSize () < 4) {
                 argList.add (null);
             }
-            self._createVersionString (argList [0], argList [1], argList [2], 
+            self._createVersionString (argList [0], argList [1], argList [2],
                                        argList [3]);
         }
         else {
-            raise ArgumentException (1);
+            raise ArgumentException ("Argument exception!");
         }
     }
-    
+
     func isAlpha (self) {
         return self.versionMajor == 0;
     }
-    
+
     func _parseVersionString (self) {
         ver = self.versionString;
         if (self.versionString.startsWith ("v")) {
             ver = self.versionString.substr (1);
         }
-        
+
         verSplit = ver.split ("-");
         versionBase = verSplit [0].split (".");
         if (verSplit.getSize () == 2) {
             self.versionTag = verSplit [1];
         }
-        
+
         foreach (i in range (3)) {
             if (versionBase.getSize () <= i) {
                 versionBase.add (0);
@@ -44,12 +44,12 @@ class SemanticVersion {
                 versionBase [i] = Int (versionBase [i]);
             }
         }
-        
+
         self.versionMajor = versionBase [0];
         self.versionMinor = versionBase [1];
         self.versionPatch = versionBase [2];
     }
-    
+
     func _createVersionString (self, major, minor, patch, tag) {
         if (null == patch) {
             patch = 0;
@@ -58,107 +58,107 @@ class SemanticVersion {
         ver = fmt.format (major, minor, patch);
         if (tag != null && tag != "") {
             ver += "-{}".format (tag);
-        } 
+        }
         self.versionString = ver;
         self._parseVersionString ();
     }
-    
+
     func isGreaterThan (self, version) {
         ver = SemanticVersion (version);
-        
+
         if (ver.versionMajor < self.versionMajor) {
             return true;
         }
         else if (ver.versionMajor > self.versionMajor) {
             return false;
         }
-        
+
         if (ver.versionMinor < self.versionMinor) {
             return true;
         }
         else if (ver.versionMinor > self.versionMinor) {
             return false;
         }
-        
+
         if (ver.versionPatch < self.versionPatch) {
             return true;
         }
-        
-        return false;    
+
+        return false;
     }
-    
+
     func isGTE (self, version) {
         ver = SemanticVersion (version);
-        if (ver.versionMajor == self.versionMajor && ver.versionMinor == 
+        if (ver.versionMajor == self.versionMajor && ver.versionMinor ==
             self.versionMinor && ver.versionPatch == self.versionPatch) {
             return true;
         }
         return self.isGreaterThan (version);
     }
-    
+
     func isLTE (self, version) {
         ver = SemanticVersion (version);
-        if (ver.versionMajor == self.versionMajor && ver.versionMinor == 
+        if (ver.versionMajor == self.versionMajor && ver.versionMinor ==
             self.versionMinor && ver.versionPatch == self.versionPatch) {
             return true;
         }
         return self.isLessThan (version);
     }
-    
+
     func isLessThan (self, version) {
         ver = SemanticVersion (version);
-        
+
         if (ver.versionMajor > self.versionMajor) {
             return true;
         }
         else if (ver.versionMajor < self.versionMajor) {
             return false;
         }
-        
+
         if (ver.versionMinor > self.versionMinor) {
             return true;
         }
         else if (ver.versionMinor < self.versionMinor) {
             return false;
         }
-        
+
         if (ver.versionPatch > self.versionPatch) {
             return true;
         }
-        
+
         return false;
     }
-    
+
     func isEqual (self, ver) {
         v = SemanticVersion (ver);
-        if (v.versionMajor == self.versionMajor && 
-            v.versionMinor == self.versionMinor && 
+        if (v.versionMajor == self.versionMajor &&
+            v.versionMinor == self.versionMinor &&
             v.versionPatch == self.versionPatch) {
             return true;
         }
         return false;
     }
-    
+
     func isMatch (self, requestedVersion) {
         if (requestedVersion == "*") {
             return true;
         }
-        
+
         if (requestedVersion.startsWith ("~")) {
             return self._isTildeMatch (requestedVersion);
         }
-        
+
         if (requestedVersion.startsWith ("^")) {
             return self._isCaretMatch (requestedVersion);
         }
-        
+
         reqVer = requestedVersion.split (" ");
         if (reqVer.contains ("-")) {
             return self._isRangeMatch (reqVer);
         }
-        
+
         conds = List ();
-        
+
         foreach (v in reqVer) {
             if (v.startsWith (">=")) {
                 conds.add (self.isGTE (v.substr (2)));
@@ -179,38 +179,38 @@ class SemanticVersion {
         if (!conds.contains (false)) {
             return true;
         }
-        
+
         return false;
     }
-    
+
     func _isRangeMatch (self, reqVer) {
         if (reqVer.getSize () != 3) {
             return false;
         }
-       
-        
+
+
         if (self.isGTE (reqVer [0]) && self.isLTE (reqVer [2])) {
             return true;
         }
-        
+
         return false;
     }
-    
+
     func _isTildeMatch (self, requestedVersion) {
         ver = SemanticVersion (requestedVersion.substr (1));
-        if (ver.versionMajor == self.versionMajor && ver.versionMinor == 
+        if (ver.versionMajor == self.versionMajor && ver.versionMinor ==
             self.versionMinor && ver.versionPatch <= self.versionPatch) {
-            return true;    
+            return true;
         }
         return false;
     }
-    
+
     func _isCaretMatch (self, requestedVersion) {
         ver = SemanticVersion (requestedVersion.substr (1));
         if (ver.versionMajor == self.versionMajor) {
             if (ver.versionMinor == self.versionMinor && ver.versionPatch <=
                 self.versionPatch) {
-                return true;   
+                return true;
             }
             if (ver.versionMinor < self.versionMinor) {
                 return true;
@@ -219,4 +219,3 @@ class SemanticVersion {
         return false;
     }
 }
-

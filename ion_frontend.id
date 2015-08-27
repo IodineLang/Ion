@@ -1,0 +1,38 @@
+use CommandLineOptions from argparse;
+use ion;
+use json;
+
+func main(args) {
+    print('Ion ({})'.format(ion.VERSION));
+    print('Visit http://github.com/IodineLang/Ion for support');
+    print('See the LICENSE file for legal information. (MIT License)');
+    print('');
+    options = CommandLineOptions();
+
+    installOptions = CommandLineOptions();
+    installOptions.addArgument('package');
+
+    options.addVerb('install', installOptions, lambda(args) => {
+        pkgs = ion.Installer(args.package).install();
+
+        print('');
+        print('Installation complete. Installed:');
+        foreach (pkg in pkgs) {
+            print('{} {}'.format(pkg, pkgs[pkg]));
+        }
+    });
+
+    options.addVerb('uninstall', installOptions, lambda(args) => {
+        pkgs = ion.Uninstaller(args.package).uninstall();
+
+        print('Removal complete.');
+    });
+
+    options.addVerb('help', CommandLineOptions(), lambda(args) => {
+        print('Arguments with <> are required. [] indicates optional.');
+        print('help - prints this!');
+        print('install <package> - installs the specified package to ./.deps');
+    });
+
+    argparse.parseArgs(options, args);
+}
