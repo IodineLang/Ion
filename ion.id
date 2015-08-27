@@ -6,10 +6,39 @@ use ziplib;
 
 VERSION = 'v0.1.0';
 REPO = 'http://iodinelang.github.io/Ion-Default-Repo/stylesheets';
+LOCATION = './.deps';
+
+class Uninstaller {
+    func Uninstaller(self, package) {
+        self.package = package;
+        self.location = LOCATION;
+    }
+
+    func uninstall(self) {
+        # TODO: Add force=true option
+        dataDir = '{}/data'.format(self.location);
+        foreach (dataFile in io.Directory.getFiles(dataDir)) {
+            _data = json.parse(open(dataFile, 'r').readAllText());
+            if (_data['dependencies'].contains(self.package)) {
+                raise PackageMismatchException(self.package);
+            }
+        }
+
+        pkgDataLoc = '{}/{}.json'.format(dataDir, self.package);
+        packageDataFile = open(pkgDataLoc, 'r');
+        _data = json.parse(packageDataFile.readAllText());
+        foreach (file in _data['files']) {
+            _file = '{}/{}'.format(self.location, file);
+            io.File.remove(_file);
+        }
+
+        io.File.remove(pkgDataLoc);
+    }
+}
 
 class Installer {
     func Installer(self, package, *args) {
-        self.location = './.deps';
+        self.location = LOCATION;
         self.package = package;
         self.dependencyResolver = DependencyResolver(package);
         if (args.getSize() > 0) {
@@ -87,22 +116,28 @@ class Installer {
             sources = ionData['sources'];
             foreach (source in sources) {
                 _loc = '{}/{}'.format(zipDest, source);
-                files = [];
+                _files = [];
                 foreach (dir in io.Directory.getDirectories(_loc)) {
                     foreach (file in io.Directory.getFiles(_loc)) {
-                        files.add(file.replace(_loc, '').substr(1));
+                        _files.add(file.replace(_loc, '').substr(1));
                     }
                 }
 
                 foreach (file in io.Directory.getFiles(_loc)) {
-                    files.add(file.replace(_loc, '').substr(1));
+                    _files.add(file.replace(_loc, '').substr(1));
                 }
 
                 io.Directory.copy(_loc, self.location);
-                
-                open('{}/{}.json'.format(dataDir, pkg), 'w').write(json.dump({
-                    'files': files
-                }));
+
+                _deps = map(data[pkg]['dependencies'], lambda(item) => {
+                    return item;
+                });
+                _dmp = json.dump({
+                    'dependencies': _deps,
+                    'files': _files,
+                });
+
+                open('{}/{}.json'.format(dataDir, pkg), 'w').write(Str(_dmp));
             }
             self._rmrf(zipDest);
         }

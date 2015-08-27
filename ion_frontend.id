@@ -22,6 +22,12 @@ func main(args) {
         }
     });
 
+    options.addVerb('uninstall', installOptions, lambda(args) => {
+        pkgs = ion.Uninstaller(args.package).uninstall();
+
+        print('Removal complete.');
+    });
+
     options.addVerb('help', CommandLineOptions(), lambda(args) => {
         print('Arguments with <> are required. [] indicates optional.');
         print('help - prints this!');
