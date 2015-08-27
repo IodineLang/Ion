@@ -5,7 +5,7 @@ use WebClient from webclient;
 use ziplib;
 
 VERSION = 'v0.1.0';
-REPO = 'http://iodinelang.github.io/Ion-Default-Repo/stylesheets';
+REPO = 'http://iodinelang.github.io/Ion-Default-Repo';
 LOCATION = './.deps';
 
 class Uninstaller {
