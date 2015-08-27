@@ -1,0 +1,138 @@
+use datetime;
+use io;
+
+class Logger {
+    
+    func register (logger) {
+        try {
+            Logger.loggers.add (logger);
+        }
+        except (e as AttributeNotFoundException) {
+            Logger.loggers = [logger];
+        }
+    }
+    
+    func info (message) {
+        foreach (logger in Logger.loggers) {
+            logger.info (message);
+        }
+    }
+    
+    func warn (message) {
+        foreach (logger in Logger.loggers) {
+            logger.warn (message);
+        }
+    }
+    
+    func error (message) {
+        foreach (logger in Logger.loggers) {
+            logger.error (message);
+        }
+    }
+    
+    func fatal (message) {
+        foreach (logger in Logger.loggers) {
+            logger.fatal (message);
+        }
+    }
+}
+
+class BaseLogger {
+    func BaseLogger (self, minLevel) {
+        self.minLevel = minLevel;
+        self.msgFmt = "[{3:d2}/{4:d2}/{5:d2} {0:d2}:{1:d2}:{2:d2}] [{6}]: {7}";
+        self.levels = {};
+        self.levels ["INFO"] = 10;
+        self.levels ["WARN"] = 20;
+        self.levels ["ERROR"] = 30;
+        self.levels ["FATAL"] = 40;
+    }
+    
+    func setFormat (self, fmt) {
+        self.msgFmt = fmt;
+    }
+    
+    func _getMessage (self, message, level) {
+        time = datetime.now ();
+        formattedMsg = self.msgFmt.format (time.hour, time.minute, 
+                       time.second, time.day, time.month, time.year, 
+                       level, message);
+        return formattedMsg;
+    }
+    
+}
+
+class OutputLogger : BaseLogger {
+    func OutputLogger (self, minLevel) {
+        # fmt must be in this format:
+        # Hour, minute, second, day, month, year, log-level, message.
+        super (minLevel);
+    }
+    
+    func info (self, message) {
+        if (self.levels ["INFO"] < self.minLevel) {
+            return;
+        }
+        print (self._getMessage (message, "INFO"));
+    }
+    
+    func warn (self, message) {
+        if (self.levels ["WARN"] < self.minLevel) {
+            return;
+        }
+        print (self._getMessage (message, "WARN"));
+    }
+    
+    func error (self, message) {
+        if (self.levels ["ERROR"] < self.minLevel) {
+            return;
+        }
+        print (self._getMessage (message, "ERROR"));
+    }
+    
+    func fatal (self, message) {
+        if (self.levels ["FATAL"] < self.minLevel) {
+            return;
+        }
+        print (self._getMessage (message, "FATAL"));
+    }
+}
+
+class FileLogger : BaseLogger {
+    func FileLogger (self, file, minLevel) {
+        super (minLevel);
+        self.file = open (file, "a");
+    }
+    
+    func info (self, message) {
+        if (self.levels ["INFO"] < self.minLevel) {
+            return;
+        }
+        self.file.write (self._getMessage (message, "INFO"));
+        self.file.write ("\n");
+    }
+    
+    func warn (self, message) {
+        if (self.levels ["WARN"] < self.minLevel) {
+            return;
+        }
+        self.file.write (self._getMessage (message, "WARN"));
+        self.file.write ("\n");
+    }
+    
+    func error (self, message) {
+        if (self.levels ["ERROR"] < self.minLevel) {
+            return;
+        }
+        self.file.write (self._getMessage (message, "ERROR"));
+        self.file.write ("\n");
+    }
+    
+    func fatal (self, message) {
+        if (self.levels ["FATAL"] < self.minLevel) {
+            return;
+        }
+        self.file.write (self._getMessage (message, "FATAL"));
+        self.file.write ("\n");
+    }
+}

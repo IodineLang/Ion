@@ -22,6 +22,24 @@ func main(args) {
         }
     });
 
+    options.addVerb('install-deps', CommandLineOptions(), lambda(args) => {
+        ionFile = json.parse(open('./ionfile.json', 'r').readAllText());
+        pkgs = {};
+        foreach(dep in ionFile['dependencies']) {
+            ver = ionFile['dependencies'][dep];
+            res = ion.Installer(dep).install(ver);
+            foreach (pkg in res) {
+                pkgs[pkg] = res[pkg];
+            }
+        }
+
+        print('');
+        print('Installation complete. Installed:');
+        foreach (pkg in pkgs) {
+            print('{} {}'.format(pkg, pkgs[pkg]));
+        }
+    });
+
     options.addVerb('uninstall', installOptions, lambda(args) => {
         pkgs = ion.Uninstaller(args.package).uninstall();
 
