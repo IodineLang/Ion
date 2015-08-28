@@ -42,7 +42,7 @@ class Installer {
         self.package = package;
         self.dependencyResolver = DependencyResolver(package);
         if (args.getSize() > 0) {
-            self.dependencyResolver = args[0];
+            self.location = args[0];
         }
     }
 
