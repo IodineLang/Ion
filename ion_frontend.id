@@ -15,6 +15,7 @@ func main(args) {
     installOptions.addOption('save', 'no', false);
 
     options.addVerb('install', installOptions, lambda(args) => {
+
         pkgs = ion.Installer(args.package).install();
 
         if (args.save != 'no') {
@@ -30,13 +31,10 @@ func main(args) {
     });
 
     options.addVerb('install-deps', CommandLineOptions(), lambda(args) => {
-        ionFile = json.parse(open('./ionfile.json', 'r').readAllText());
+        f = open('./ionfile.json', 'r');
+        ionFile = json.parse(f.readAllText());
+        f.close();
         pkgs = {};
-        installLoc = './.deps';
-        if (ionFile.contains('dependencyLocation')) {
-            # dependencyLocation should be something like 'src/'
-            installLoc = './{}.deps'.format(ionFile['dependencyLocation']);
-        }
 
         foreach(dep in ionFile['dependencies']) {
             ver = ionFile['dependencies'][dep];

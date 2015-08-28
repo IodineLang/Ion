@@ -14,11 +14,22 @@ class IonFileManager {
 
     }
 
+    func getDependencyLocation(self) {
+        f = open('./ionfile.json', 'r');
+        ionFile = json.parse(f.readAllText());
+        if (!ionFile.contains('dependencyLocation')) {
+            return null;
+        }
+
+        return ionFile['dependencyLocation'];
+    }
+
     func create(self) {
         f = open('./ionfile.json', 'w');
         f.write(json.dump({
             'sources': ['src'],
-            'dependencies': {}
+            'dependencies': {},
+            'dependencyLocation': 'src'
         }));
         f.close();
     }
@@ -90,6 +101,11 @@ class Installer {
         self.dependencyResolver = DependencyResolver(package);
         if (args.getSize() > 0) {
             self.location = args[0];
+        } else {
+            _loc = IonFileManager().getDependencyLocation();
+            if (_loc != null) {
+                self.location = '{}/.deps'.format(_loc);
+            }
         }
     }
 
