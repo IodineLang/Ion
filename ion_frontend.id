@@ -38,7 +38,7 @@ func main(args) {
 
         foreach(dep in ionFile['dependencies']) {
             ver = ionFile['dependencies'][dep];
-            res = ion.Installer(dep, installLoc).install(ver);
+            res = ion.Installer(dep).install(ver);
             foreach (pkg in res) {
                 pkgs[pkg] = res[pkg];
             }
