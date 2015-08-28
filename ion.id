@@ -1,3 +1,4 @@
+use hash;
 use io;
 use json;
 use SemanticVersion from semver;
@@ -7,6 +8,32 @@ use ziplib;
 VERSION = 'v0.1.0';
 REPO = 'http://iodinelang.github.io/Ion-Default-Repo';
 LOCATION = './.deps';
+
+class IonFileManager {
+    func IonFileManager(self) {
+
+    }
+
+    func create(self) {
+        f = open('./ionfile.json', 'w');
+        f.write(json.dump({
+            'sources': ['src'],
+            'dependencies': {}
+        }));
+        f.close();
+    }
+
+    func addDep(self, pkg, fullVersion) {
+        f = open('./ionfile.json', 'r');
+        ionFile = json.parse(f.readAllText());
+        f.close();
+        ver = SemanticVersion(fullVersion);
+        ionFile['dependencies'][pkg] = '^{}.{}.{}'.format(ver.versionMajor,
+            ver.versionMinor, ver.versionPatch);
+        f = open('./ionfile.json', 'w');
+        f.write(json.dump(ionFile));
+    }
+}
 
 class DataManager {
     func DataManager(self, *args) {
@@ -129,6 +156,15 @@ class Installer {
             zipLoc = '{}/{}-{}.zip'.format(cacheDir, pkg, version);
             WebClient().downloadFile(src, zipLoc);
 
+            # SHA1 verification
+            if (pkgVerData.contains('sha1')) {
+                f = open(zipLoc, 'r');
+                if (hash.sha1(f) != pkgVerData['sha1']) {
+                    raise UnsafePackageException(pkg);
+                }
+            }
+
+
             ziplib.unzipToDirectory(zipLoc, cacheDir);
             zipDest = '{}/{}'.format(cacheDir, pkgVerData['ionfileLocation']);
             ionLoc = '{}/ionfile.json'.format(zipDest);
@@ -249,5 +285,12 @@ class PackageRequiredException : Exception {
     func PackageRequiredException(self, package, dependedBy) {
         super('Could not continue - cannot uninstall {} (required by {})!'
             .format(package, dependedBy));
+    }
+}
+
+class UnsafePackageException : Exception {
+    func UnsafePackageException(self, package) {
+        super(('The hash of {} could not be verified. Please delete ' +
+            './.deps/cache immediately').format(package));
     }
 }

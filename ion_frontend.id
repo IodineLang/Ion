@@ -1,4 +1,5 @@
 use CommandLineOptions from argparse;
+use io;
 use ion;
 use json;
 
@@ -11,9 +12,15 @@ func main(args) {
 
     installOptions = CommandLineOptions();
     installOptions.addArgument('package');
+    installOptions.addOption('save', 'no', false);
 
     options.addVerb('install', installOptions, lambda(args) => {
         pkgs = ion.Installer(args.package).install();
+
+        if (args.save != 'no') {
+            print('UPDATE ionfile.json');
+            ion.IonFileManager().addDep(args.package, pkgs[args.package]);
+        }
 
         print('');
         print('Installation complete. Installed:');
@@ -44,6 +51,18 @@ func main(args) {
         foreach (pkg in pkgs) {
             print('{} {}'.format(pkg, pkgs[pkg]));
         }
+    });
+
+    options.addVerb('init', CommandLineOptions(), lambda(args) => {
+        print('Creating src directory');
+        io.Directory.create('./src');
+        print('Creating ionfile.json');
+        ion.IonFileManager().create();
+        print('Installing espresso test library');
+        testLib = 'espresso';
+        pkgs = ion.Installer(testLib).install();
+        ion.IonFileManager().addDep(testLib, pkgs[testLib]);
+        print('Done!');
     });
 
     options.addVerb('uninstall', installOptions, lambda(args) => {

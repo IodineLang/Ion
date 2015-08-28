@@ -1,0 +1,239 @@
+use reflection;
+use sys;
+
+class Test {
+    func Test(self, indentLevel) {
+        self.results = {};
+        self.preTasks = [];
+        self.postTasks = [];
+        self.indentLevel = indentLevel;
+    }
+
+    func describe(self, name, block) {
+        results = _describe(name, block, self.indentLevel + 1);
+        foreach (result in results) {
+            self.results['{} {}'.format(name, result)] = results[result];
+        }
+    }
+
+    func it(self, name, block) {
+        foreach (task in self.preTasks) {
+            task();
+        }
+
+        fail = false;
+        msg = null;
+
+        try {
+            block();
+        } except (e) {
+            fail = true;
+            msg = e.message;
+        }
+
+        self.results[name] = (fail, msg);
+
+        foreach (task in self.postTasks) {
+            task();
+        }
+    }
+
+    func beforeEach(self, block) {
+        self.preTasks.add(block);
+    }
+
+    func afterEach(self, block) {
+        self.postTasks.add(block);
+    }
+}
+
+func describe(name, block) {
+    results = _describe(name, block, 1);
+    failures = filter(results, lambda(result) => {
+        return results[result][0] == true;
+    });
+
+    if (failures.getSize() > 0) {
+        print('Build failed!');
+        sys.exit(failures.getSize());
+    }
+}
+
+func _describe(name, block, indent) {
+    indentation = '';
+    for (i = 0; i < indent; i += 1) {
+        indentation += '    ';
+    }
+    testObj = Test(indent);
+    print('{}{}'.format(indentation, name));
+    try {
+        block(testObj);
+    } except (e) {
+        print('{}failure in espresso! report this: {}'.format(indentation, e.message));
+    }
+
+    fails = 0;
+    foreach(test in testObj.results) {
+        result = testObj.results[test];
+        if (!result[0]) {
+            print('{}{} [✓]'.format(indentation, test));
+        } else {
+            print('{}{} [✗] - {}'.format(indentation, test, result[1]));
+            fails += 1;
+        }
+    }
+
+    print('');
+    print('{}Summary of "{}":'.format(indentation, name));
+    print('{}{} passes'.format(indentation, testObj.results.getSize() - fails));
+    print('{}{} failures'.format(indentation, fails));
+    print('');
+
+    return testObj.results;
+}
+
+class AssertionException : Exception {
+    func AssertionException(self, message) {
+        super(message);
+    }
+}
+
+class InvalidTestException : Exception {
+    func InvalidTestException(self, message) {
+        super('INVALID TEST - {}'.format(message));
+    }
+}
+
+class Expect {
+    func Expect(self, obj) {
+        self.obj = obj;
+        # .to doesn't actually do anything
+        self.to = self;
+        self.be = self;
+        self.have = self;
+        self.at = self;
+        self.negateFlag = false;
+    }
+
+    func not(self) {
+        self.negateFlag = true;
+        return self;
+    }
+
+    func equal(self, value) {
+        test = self.obj.typeDef == value.typeDef && self.obj == value;
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {}, but got {}!'.format(value, self.obj));
+        }
+    }
+
+    func attribute(self, attr) {
+        test = reflection.hasAttribute(self.obj, attr);
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to have attribute {}'.format(self.obj, attr));
+        }
+    }
+
+    func _true(self) {
+        test = self.obj.typeDef == true.typeDef && self.obj == true;
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to be true'.format(self.obj));
+        }
+    }
+
+    func _false(self) {
+        test = self.obj.typeDef == false.typeDef && self.obj == false;
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to be false'.format(self.obj));
+        }
+    }
+
+    func _null(self) {
+        test = self.obj == null;
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to be null or undefined'.format(self.obj));
+        }
+    }
+
+    func key(self, value) {
+        test = self.obj.typeDef == {}.typeDef && self.obj.contains(value);
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to have key {}'.format(self.obj, value));
+        }
+    }
+
+    func keys(self, *values) {
+        test = self.obj.typeDef == {}.typeDef;
+        foreach(value in values) {
+            test = test && self.obj.contains(value);
+        }
+
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to have keys [{}]'
+                .format(self.obj, ', '.join(values)));
+        }
+    }
+
+    func a(self, type) {
+        test = Str(self.obj.typeDef) == Str(type);
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to be a {}, but got {}'
+                .format(self.obj, type, self.obj.typeDef));
+        }
+    }
+
+    func above(self, value) {
+        test = self.obj.typeDef == value.typeDef && self.obj > value;
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to be greater than {}'
+                .format(self.obj, value));
+        }
+    }
+
+    func below(self, value) {
+        test = self.obj.typeDef == value.typeDef && self.obj < value;
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to be less than {}'
+                .format(self.obj, value));
+        }
+    }
+
+    func least(self, value) {
+        test = self.obj.typeDef == value.typeDef && self.obj >= value;
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to be greater/equal to {}'
+                .format(self.obj, value));
+        }
+    }
+
+    func most(self, value) {
+        test = self.obj.typeDef == value.typeDef && self.obj <= value;
+        if (!self._runTest(test)) {
+            raise AssertionException('expected {} to be less/equal to {}'
+                .format(self.obj, value));
+        }
+    }
+
+    func an(self, type) {
+        self.a(type);
+    }
+
+    func _runTest(self, test) {
+        # True == pass
+        # False == fail
+
+        if (self.negateFlag) {
+            test = !test;
+        }
+
+        if (test) {
+            return true;
+        }
+
+        return false;
+    }
+}
+
+func expect(obj) {
+    return Expect(obj);
+}
