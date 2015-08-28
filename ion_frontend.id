@@ -65,6 +65,84 @@ func main(args) {
         print('Done!');
     });
 
+    options.addVerb('package', CommandLineOptions(), lambda(args) => {
+        friendlyName = input('Enter project full name: ');
+        description = input('Enter a short description for the project: ');
+        maintainerName = input('Enter the maintainer name: ');
+        maintainerUrl = input('Enter a contact URL (for bug reports etc): ');
+        packageName = input('Enter package name (ion install ...): ');
+        print('');
+        useGithub = input('Are you using GitHub to host releases (y/n)? ');
+        version = '';
+        download = '';
+        ionfileLocation = '';
+        if (useGithub.startsWith('y')) {
+            print('Open your browser and create a GitHub release now.');
+            username = input('Enter GitHub username: ');
+            project = input('Enter project name: ');
+            version = input('Enter release tag: ');
+            download = 'https://github.com/{}/{}/archive/{}.zip'
+                .format(username, project, version);
+            if (version.startsWith('v')) {
+                ionfileLocation = '{}-{}'.format(project, version.substr(1));
+            } else {
+                ionfileLocation = '{}-{}'.format(project, version);
+            }
+        } else {
+            download = input('Enter download location: ');
+            ionfileLocation = input('Enter path to ionfile.json, without any' +
+                ' leading or trailing slash, and without ionfile.json');
+        }
+
+        useHash = input('Use SHA1 hash (y/n)? ');
+        res = '';
+        print('Loading dependencies...');
+        ionFile = json.parse(open('./ionfile.json', 'r').readAllText());
+        dependencies = ionFile['dependencies'];
+        if (useHash.startsWith('y')) {
+            hash = input('Enter SHA1 hash: ');
+            res = json.dump({
+                'name': packageName,
+                'friendlyName': friendlyName,
+                'description': description,
+                'maintainer': {
+                    'name': maintainerName,
+                    'url': maintainerUrl
+                },
+                'versions': {
+                    version: {
+                        'download': download,
+                        'ionfileLocation': ionfileLocation,
+                        'sha1': hash
+                    }
+                },
+                'dependencies': dependencies
+            });
+        } else {
+            res = json.dump({
+                'name': packageName,
+                'friendlyName': friendlyName,
+                'description': description,
+                'maintainer': {
+                    'name': maintainerName,
+                    'url': maintainerUrl
+                },
+                'versions': {
+                    version: {
+                        'download': download,
+                        'ionfileLocation': ionfileLocation
+                    }
+                },
+                'dependencies': dependencies
+            });
+        }
+
+        print('Dumping to {}.json'.format(packageName));
+        f = open('./{}.json'.format(packageName), 'w');
+        f.write(res);
+        f.close();
+    });
+
     options.addVerb('uninstall', installOptions, lambda(args) => {
         pkgs = ion.Uninstaller(args.package).uninstall();
 
