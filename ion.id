@@ -8,6 +8,26 @@ VERSION = 'v0.1.0';
 REPO = 'http://iodinelang.github.io/Ion-Default-Repo';
 LOCATION = './.deps';
 
+class DataManager {
+    func DataManager(self, *args) {
+        self.location = LOCATION;
+        if (args.getSize() == 1) {
+            self.location = args[0];
+        }
+    }
+
+    func getAll(self) {
+        dataDir = '{}/data'.format(self.location);
+        items = {};
+        foreach (dataFile in io.Directory.getFiles(dataDir)) {
+            _data = json.parse(open(dataFile, 'r').readAllText());
+            items[_data['name']] = _data;
+        }
+
+        return items;
+    }
+}
+
 class Uninstaller {
     func Uninstaller(self, package) {
         self.package = package;
@@ -20,7 +40,7 @@ class Uninstaller {
         foreach (dataFile in io.Directory.getFiles(dataDir)) {
             _data = json.parse(open(dataFile, 'r').readAllText());
             if (_data['dependencies'].contains(self.package)) {
-                raise PackageMismatchException(self.package);
+                raise PackageRequiredException(self.package, _data['name']);
             }
         }
 
@@ -118,7 +138,7 @@ class Installer {
                 _loc = '{}/{}'.format(zipDest, source);
                 _files = [];
                 foreach (dir in io.Directory.getDirectories(_loc)) {
-                    foreach (file in io.Directory.getFiles(_loc)) {
+                    foreach (file in io.Directory.getFiles(dir)) {
                         _files.add(file.replace(_loc, '').substr(1));
                     }
                 }
@@ -127,14 +147,13 @@ class Installer {
                     _files.add(file.replace(_loc, '').substr(1));
                 }
 
-                io.Directory.copy(_loc, self.location);
+                io.Directory.copy(_loc, self.location, true);
 
-                _deps = map(data[pkg]['dependencies'], lambda(item) => {
-                    return item;
-                });
                 _dmp = json.dump({
-                    'dependencies': _deps,
+                    'dependencies': data[pkg]['dependencies'],
                     'files': _files,
+                    'version': version,
+                    'name': pkg
                 });
 
                 open('{}/{}.json'.format(dataDir, pkg), 'w').write(Str(_dmp));
@@ -223,5 +242,12 @@ class DependencyResolver {
 class PackageMismatchException : Exception {
     func PackageMismatchException(self, package) {
         super('Could not continue - cannot install {}!'.format(package));
+    }
+}
+
+class PackageRequiredException : Exception {
+    func PackageRequiredException(self, package, dependedBy) {
+        super('Could not continue - cannot uninstall {} (required by {})!'
+            .format(package, dependedBy));
     }
 }

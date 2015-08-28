@@ -52,10 +52,24 @@ func main(args) {
         print('Removal complete.');
     });
 
+    options.addVerb('list-installed', CommandLineOptions(), lambda(args) => {
+        items = ion.DataManager().getAll();
+
+        foreach (item in items) {
+            print ('{} {}'.format(item, items[item]['version']));
+            foreach (dep in items[item]['dependencies']) {
+                print ('|- {} {}'.format(dep, items[item]['dependencies'][dep]));
+            }
+        }
+    });
+
     options.addVerb('help', CommandLineOptions(), lambda(args) => {
         print('Arguments with <> are required. [] indicates optional.');
         print('help - prints this!');
         print('install <package> - installs the specified package to ./.deps');
+        print('install-deps - installs all dependencies listed in ionfile.json');
+        print('uninstall <package> - uninstalls the specified package (unless' +
+              ' it is required by something else)');
     });
 
     argparse.parseArgs(options, args);
