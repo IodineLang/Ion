@@ -14,7 +14,7 @@ func main(args) {
     installOptions.addArgument('package');
     installOptions.addOption('save', 'no', false);
 
-    options.addVerb('install', installOptions, lambda(args) => {
+    options.addVerb('install', installOptions, lambda(args) {
 
         pkgs = ion.Installer(args.package).install();
 
@@ -30,7 +30,7 @@ func main(args) {
         }
     });
 
-    options.addVerb('install-deps', CommandLineOptions(), lambda(args) => {
+    options.addVerb('install-deps', CommandLineOptions(), lambda(args) {
         f = open('./ionfile.json', 'r');
         ionFile = json.parse(f.readAllText());
         f.close();
@@ -51,7 +51,7 @@ func main(args) {
         }
     });
 
-    options.addVerb('init', CommandLineOptions(), lambda(args) => {
+    options.addVerb('init', CommandLineOptions(), lambda(args) {
         print('Creating src directory');
         io.Directory.create('./src');
         print('Creating ionfile.json');
@@ -63,7 +63,7 @@ func main(args) {
         print('Done!');
     });
 
-    options.addVerb('package', CommandLineOptions(), lambda(args) => {
+    options.addVerb('package', CommandLineOptions(), lambda(args) {
         friendlyName = input('Enter project full name: ');
         description = input('Enter a short description for the project: ');
         maintainerName = input('Enter the maintainer name: ');
@@ -141,13 +141,13 @@ func main(args) {
         f.close();
     });
 
-    options.addVerb('uninstall', installOptions, lambda(args) => {
+    options.addVerb('uninstall', installOptions, lambda(args) {
         pkgs = ion.Uninstaller(args.package).uninstall();
 
         print('Removal complete.');
     });
 
-    options.addVerb('list-installed', CommandLineOptions(), lambda(args) => {
+    options.addVerb('list-installed', CommandLineOptions(), lambda(args) {
         items = ion.DataManager().getAll();
 
         foreach (item in items) {
@@ -158,7 +158,7 @@ func main(args) {
         }
     });
 
-    options.addVerb('help', CommandLineOptions(), lambda(args) => {
+    options.addVerb('help', CommandLineOptions(), lambda(args) {
         print('Arguments with <> are required. [] indicates optional.');
         print('help - prints this!');
         print('install <package> - installs the specified package to ./.deps');
