@@ -8,7 +8,7 @@ class SemanticVersion {
             self._parseVersionString ();
         }
         else if (args.getSize() >= 2) {
-            argList = List () + args;
+            argList = [] + args;
             while (argList.getSize () < 4) {
                 argList.add (null);
             }
@@ -157,7 +157,7 @@ class SemanticVersion {
             return self._isRangeMatch (reqVer);
         }
 
-        conds = List ();
+        conds = [];
 
         foreach (v in reqVer) {
             if (v.startsWith (">=")) {
