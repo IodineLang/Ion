@@ -15,34 +15,36 @@ class IonFileManager {
     }
 
     func getDependencyLocation(self) {
-        f = open('./ionfile.json', 'r');
-        ionFile = json.parse(f.readAllText());
-        if (!ionFile.contains('dependencyLocation')) {
-            return null;
-        }
+        with (f = open('./ionfile.json', 'r')) {
+            ionFile = json.parse(f.readAllText());
+            if (!ionFile.contains('dependencyLocation')) {
+                return null;
+            }
 
-        return ionFile['dependencyLocation'];
+            return ionFile['dependencyLocation'];
+        }
     }
 
     func create(self) {
-        f = open('./ionfile.json', 'w');
-        f.write(json.dump({
-            'sources': ['src'],
-            'dependencies': {},
-            'dependencyLocation': 'src'
-        }));
-        f.close();
+        with (f = open('./ionfile.json', 'w')) {
+            f.write(json.dump({
+                'sources': ['src'],
+                'dependencies': {},
+                'dependencyLocation': 'src'
+            }));
+        }
     }
 
     func addDep(self, pkg, fullVersion) {
-        f = open('./ionfile.json', 'r');
-        ionFile = json.parse(f.readAllText());
-        f.close();
+        with (f = open('./ionfile.json', 'r')) {
+            ionFile = json.parse(f.readAllText());
+        }
         ver = SemanticVersion(fullVersion);
         ionFile['dependencies'][pkg] = '^{}.{}.{}'.format(ver.versionMajor,
             ver.versionMinor, ver.versionPatch);
-        f = open('./ionfile.json', 'w');
-        f.write(json.dump(ionFile));
+        with (f = open('./ionfile.json', 'w')) {
+            f.write(json.dump(ionFile));
+        }
     }
 }
 
@@ -99,7 +101,7 @@ class Installer {
         self.location = LOCATION;
         self.package = package;
         self.dependencyResolver = DependencyResolver(package);
-        if (args.getSize() > 0) {
+        if (len (args) > 0) {
             self.location = args[0];
         } else {
             _loc = IonFileManager().getDependencyLocation();
@@ -111,7 +113,7 @@ class Installer {
 
     func install(self, *args) {
         version = '*';
-        if (args.getSize() == 1) {
+        if (len (args) == 1) {
             version = args[0];
         }
 
@@ -250,7 +252,7 @@ class DependencyResolver {
         # resolve collects a list of dependencies to fetch with version
         # constraints.
         versions = ['*'];
-        if (args.getSize() > 0) {
+        if (len (args) > 0) {
             # args appears to be a tuple.
             versions = [];
             foreach (arg in args) {
