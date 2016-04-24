@@ -1,6 +1,8 @@
-use hash;
 use io;
+use os;
+use hash;
 use json;
+use fsutils;
 use SemanticVersion from semver;
 use WebClient from webclient;
 use ziplib;
@@ -9,25 +11,29 @@ VERSION = 'v0.1.0';
 REPO = 'http://iodinelang.github.io/Ion-Default-Repo';
 LOCATION = './.deps';
 
+
+func _getFiles (dir) => filter (os.list (dir), lambda (p) => fsutils.isfile (p));
+func _getDirs (dir) => filter (os.list (dir), lambda (p) => fsutils.isdir (p));
+
 class IonFileManager {
-    func IonFileManager(self) {
+    func IonFileManager (self) {
 
     }
 
-    func getDependencyLocation(self) {
-        with (f = open('./ionfile.json', 'r')) {
-            ionFile = json.parse(f.readAllText());
-            if (!ionFile.contains('dependencyLocation')) {
+    func getDependencyLocation (self) {
+        with (f = open ('./ionfile.json', 'r')) {
+            ionFile = json.parse (f.readAll ());
+            if (!ionFile.contains ('dependencyLocation')) {
                 return null;
             }
 
-            return ionFile['dependencyLocation'];
+            return ionFile ['dependencyLocation'];
         }
     }
 
-    func create(self) {
-        with (f = open('./ionfile.json', 'w')) {
-            f.write(json.dump({
+    func create (self) {
+        with (f = open ('./ionfile.json', 'w')) {
+            f.write (json.dump({
                 'sources': ['src'],
                 'dependencies': {},
                 'dependencyLocation': 'src'
@@ -35,32 +41,36 @@ class IonFileManager {
         }
     }
 
-    func addDep(self, pkg, fullVersion) {
-        with (f = open('./ionfile.json', 'r')) {
-            ionFile = json.parse(f.readAllText());
+    func addDep (self, pkg, fullVersion) {
+        ionFile = null;
+        with (f = open ('./ionfile.json', 'r')) {
+            ionFile = json.parse (f.readAll ());
         }
-        ver = SemanticVersion(fullVersion);
-        ionFile['dependencies'][pkg] = '^{}.{}.{}'.format(ver.versionMajor,
-            ver.versionMinor, ver.versionPatch);
-        with (f = open('./ionfile.json', 'w')) {
-            f.write(json.dump(ionFile));
+        ver = SemanticVersion (fullVersion);
+        ionFile['dependencies'][pkg] = '^{}.{}.{}'.format (
+            ver.versionMajor,
+            ver.versionMinor,
+            ver.versionPatch
+        );
+        with (f = open ('./ionfile.json', 'w')) {
+            f.write (json.dump (ionFile));
         }
     }
 }
 
 class DataManager {
-    func DataManager(self, *args) {
+    func DataManager (self, *args) {
         self.location = LOCATION;
-        if (args.getSize() == 1) {
+        if (len (args) == 1) {
             self.location = args[0];
         }
     }
 
-    func getAll(self) {
+    func getAll (self) {
         dataDir = '{}/data'.format(self.location);
         items = {};
-        foreach (dataFile in io.Directory.getFiles(dataDir)) {
-            _data = json.parse(open(dataFile, 'r').readAllText());
+        for (dataFile in _getFiles (dataDir)) {
+            _data = json.parse(open (dataFile, 'r').readAll ());
             items[_data['name']] = _data;
         }
 
@@ -69,139 +79,140 @@ class DataManager {
 }
 
 class Uninstaller {
-    func Uninstaller(self, package) {
+    func Uninstaller (self, package) {
         self.package = package;
         self.location = LOCATION;
     }
 
-    func uninstall(self) {
+    func uninstall (self) {
         # TODO: Add force=true option
-        dataDir = '{}/data'.format(self.location);
-        foreach (dataFile in io.Directory.getFiles(dataDir)) {
-            _data = json.parse(open(dataFile, 'r').readAllText());
-            if (_data['dependencies'].contains(self.package)) {
-                raise PackageRequiredException(self.package, _data['name']);
+        dataDir = '{}/data'.format (self.location);
+        for (dataFile in _getFiles (dataDir)) {
+            _data = json.parse (open (dataFile, 'r').readAll ());
+            if (_data ['dependencies'].contains (self.package)) {
+                raise PackageRequiredException (self.package, _data ['name']);
             }
         }
 
-        pkgDataLoc = '{}/{}.json'.format(dataDir, self.package);
-        packageDataFile = open(pkgDataLoc, 'r');
-        _data = json.parse(packageDataFile.readAllText());
-        foreach (file in _data['files']) {
-            _file = '{}/{}'.format(self.location, file);
-            io.File.remove(_file);
+        pkgDataLoc = '{}/{}.json'.format (dataDir, self.package);
+        packageDataFile = open (pkgDataLoc, 'r');
+        _data = json.parse (packageDataFile.readAll ());
+        for (file in _data ['files']) {
+            _file = '{}/{}'.format (self.location, file);
+            os.unlink (_file);
         }
 
-        io.File.remove(pkgDataLoc);
+        os.unlink (pkgDataLoc);
     }
 }
 
 class Installer {
-    func Installer(self, package, *args) {
+    func Installer (self, package, *args) {
         self.location = LOCATION;
         self.package = package;
-        self.dependencyResolver = DependencyResolver(package);
+        self.dependencyResolver = DependencyResolver (package);
         if (len (args) > 0) {
             self.location = args[0];
         } else {
-            _loc = IonFileManager().getDependencyLocation();
+            _loc = IonFileManager ().getDependencyLocation ();
             if (_loc != null) {
-                self.location = '{}/.deps'.format(_loc);
+                self.location = '{}/.deps'.format (_loc);
             }
         }
     }
 
-    func install(self, *args) {
+    func install (self, *args) {
         version = '*';
         if (len (args) == 1) {
-            version = args[0];
+            version = args [0];
         }
 
-        toInstall = self.dependencyResolver.resolve(version);
+        toInstall = self.dependencyResolver.resolve (version);
 
         # This will contain all package info (for use when unpacking)
         data = {};
         # Chosen versions are stored here (so installations don't half-occur)
         chosenVersion = {};
 
-        foreach (pkg in toInstall) {
-            data[pkg] = self.fetch(pkg);
-            foreach (version in data[pkg]['versions']) {
-                _sv = SemanticVersion(version);
+        for (pkg in toInstall) {
+            data[pkg] = self.fetch (pkg);
+            for (version in data [pkg]['versions']) {
+                _sv = SemanticVersion (version);
                 reject = false;
-                foreach (reqVersion in toInstall[pkg]) {
-                    if (!_sv.isMatch(reqVersion)) {
+                for (reqVersion in toInstall [pkg]) {
+                    if (!_sv.isMatch (reqVersion)) {
                         reject = true;
                         break;
                     }
                 }
 
                 if (!reject) {
-                    chosenVersion[pkg] = version;
+                    chosenVersion [pkg] = version;
                     break;
                 }
             }
 
-            if (!chosenVersion.contains(pkg)) {
-                raise PackageMismatchException(pkg);
+            if (!chosenVersion.contains (pkg)) {
+                raise PackageMismatchException (pkg);
             }
         }
 
         # Actually install the packages
-        self._installToDisk(data, chosenVersion);
+        self._installToDisk (data, chosenVersion);
         return chosenVersion;
     }
 
-    func _installToDisk(self, data, chosenVersion) {
-        if (!io.Directory.exists(self.location)) {
-            io.Directory.create(self.location);
+    func _installToDisk (self, data, chosenVersion) {
+        if (!fsutils.isdir (self.location)) {
+            os.mkdir (self.location);
         }
 
-        cacheDir = '{}/cache'.format(self.location);
-        if (!io.Directory.exists(cacheDir)) {
-            io.Directory.create(cacheDir);
+        cacheDir = '{}/cache'.format (self.location);
+        if (!fsutils.isdir (cacheDir)) {
+            os.mkdir (cacheDir);
         }
 
-        dataDir = '{}/data'.format(self.location);
-        if (!io.Directory.exists(dataDir)) {
-            io.Directory.create(dataDir);
+        dataDir = '{}/data'.format (self.location);
+        if (!fsutils.isdir (dataDir)) {
+            os.mkdir (dataDir);
         }
 
-        foreach (pkg in chosenVersion) {
+        for (pkg in chosenVersion) {
             version = chosenVersion[pkg];
             pkgVerData = data[pkg]['versions'][version];
             src = pkgVerData['download'];
-            zipLoc = '{}/{}-{}.zip'.format(cacheDir, pkg, version);
-            WebClient().downloadFile(src, zipLoc);
+            zipLoc = '{}/{}-{}.zip'.format (cacheDir, pkg, version);
+            WebClient().downloadFile (src, zipLoc);
 
             # SHA1 verification
-            if (pkgVerData.contains('sha1')) {
-                f = open(zipLoc, 'r');
-                if (hash.sha1(f) != pkgVerData['sha1']) {
-                    raise UnsafePackageException(pkg);
+            if (pkgVerData.contains ('sha1')) {
+                with (f = open (zipLoc, 'r')) {
+                    if (hash.sha1 (f) != pkgVerData ['sha1']) {
+                        raise UnsafePackageException(pkg);
+                    }
                 }
             }
 
 
-            ziplib.unzipToDirectory(zipLoc, cacheDir);
-            zipDest = '{}/{}'.format(cacheDir, pkgVerData['ionfileLocation']);
-            ionLoc = '{}/ionfile.json'.format(zipDest);
-            ionData = json.parse(open(ionLoc, 'r').readAllText());
-            sources = ionData['sources'];
-            foreach (source in sources) {
-                _loc = '{}/{}'.format(zipDest, source);
+            ziplib.unzipToDirectory (zipLoc, cacheDir);
+            zipDest = '{}/{}'.format (cacheDir, pkgVerData ['ionfileLocation']);
+            ionLoc = '{}/ionfile.json'.format (zipDest);
+            ionData = json.parse (open(ionLoc, 'r').readAll());
+            sources = ionData ['sources'];
+            for (source in sources) {
+                _loc = '{}/{}'.format (zipDest, source);
                 _files = [];
-                foreach (dir in io.Directory.getDirectories(_loc)) {
-                    foreach (file in io.Directory.getFiles(dir)) {
-                        _files.add(file.replace(_loc, '').substr(1));
+                for (dir in _getDirs (_loc)) {
+                    for (file in _getFiles (dir)) {
+                        _files.append (file.replace (_loc, '').substr (1));
                     }
                 }
 
-                foreach (file in io.Directory.getFiles(_loc)) {
-                    _files.add(file.replace(_loc, '').substr(1));
+                for (file in _getFiles(_loc)) {
+                    _files.append (file.replace (_loc, '').substr (1));
                 }
 
-                io.Directory.copy(_loc, self.location, true);
+                fsutils.copytree (_loc, self.location, true);
 
                 _dmp = json.dump({
                     'dependencies': data[pkg]['dependencies'],
@@ -210,81 +221,81 @@ class Installer {
                     'name': pkg
                 });
 
-                open('{}/{}.json'.format(dataDir, pkg), 'w').write(Str(_dmp));
+                open ('{}/{}.json'.format (dataDir, pkg), 'w').write (Str (_dmp));
             }
-            self._rmrf(zipDest);
+            self._rmrf (zipDest);
         }
 
-        self._rmrf(cacheDir);
+        self._rmrf (cacheDir);
     }
 
-    func _rmrf(self, loc) {
-        foreach (file in io.Directory.getFiles(loc)) {
-            io.File.remove(file);
+    func _rmrf (self, loc) {
+        for (file in _getFiles(loc)) {
+            os.unlink(file);
         }
 
-        foreach (dir in io.Directory.getDirectories(loc)) {
+        for (dir in _getDirs(loc)) {
             self._rmrf(dir);
         }
-        io.Directory.remove(loc);
+        os.rmdir (loc);
     }
 
 
-    func fetch(self, pkg) {
-        loc = '{}/{}.json'.format(REPO, pkg);
+    func fetch (self, pkg) {
+        loc = '{}/{}.json'.format (REPO, pkg);
         print('GET ' + loc);
-        return json.parse(WebClient().downloadString(loc));
+        return json.parse (WebClient ().downloadString (loc));
     }
 }
 
 class DependencyResolver {
-    func DependencyResolver(self, package) {
+    func DependencyResolver (self, package) {
         self.package = package;
     }
 
-    func fetch(self) {
+    func fetch (self) {
         loc = '{}/{}.json'.format(REPO, self.package);
         print('GET ' + loc);
         return json.parse(WebClient().downloadString(loc));
     }
 
-    func resolve(self, *args) {
+    func resolve (self, *args) {
         # resolve collects a list of dependencies to fetch with version
         # constraints.
         versions = ['*'];
         if (len (args) > 0) {
             # args appears to be a tuple.
             versions = [];
-            foreach (arg in args) {
-                versions.add(arg);
+            for (arg in args) {
+                versions.append (arg);
             }
         }
         # All dependencies are collected in toInstall
         toInstall = {};
 
-        pkg = self.fetch();
+        pkg = self.fetch ();
 
-        dependencies = pkg['dependencies'];
+        dependencies = pkg ['dependencies'];
 
         # Key is package name, value is version
-        foreach (dep in dependencies) {
-            _deps = DependencyResolver(dep).resolve(dependencies[dep]);
-            toInstall = self._join(toInstall, _deps);
+        for (dep in dependencies) {
+            _deps = DependencyResolver (dep).resolve (dependencies[dep]);
+            toInstall = self._join (toInstall, _deps);
         }
 
-        toInstall = self._join(toInstall, {self.package: versions});
+        toInstall = self._join (toInstall, {self.package: versions});
         return toInstall;
     }
 
-    func _join(self, base, toJoin) {
+    func _join (self, base, toJoin) {
         # Joins two dependency chains. Gives up if versions conflict.
-        foreach (dep in toJoin) {
+        for (dep in toJoin) {
             if (!base.contains(dep)) {
                 # Create a 1-list of version constraints.
                 base[dep] = toJoin[dep];
             } else {
-                foreach (_newDep in toJoin[dep]) {
-                    base[dep].add(_newDep);
+                for (_newDep in toJoin[dep]) {
+                    base[dep].append(_newDep);
                 }
             }
         }
@@ -294,21 +305,21 @@ class DependencyResolver {
 }
 
 class PackageMismatchException : Exception {
-    func PackageMismatchException(self, package) {
-        super('Could not continue - cannot install {}!'.format(package));
+    func PackageMismatchException (self, package) {
+        super ('Could not continue - cannot install {}!'.format (package));
     }
 }
 
 class PackageRequiredException : Exception {
-    func PackageRequiredException(self, package, dependedBy) {
-        super('Could not continue - cannot uninstall {} (required by {})!'
+    func PackageRequiredException (self, package, dependedBy) {
+        super ('Could not continue - cannot uninstall {} (required by {})!'
             .format(package, dependedBy));
     }
 }
 
 class UnsafePackageException : Exception {
-    func UnsafePackageException(self, package) {
-        super(('The hash of {} could not be verified. Please delete ' +
+    func UnsafePackageException (self, package) {
+        super (('The hash of {} could not be verified. Please delete ' +
             './.deps/cache immediately').format(package));
     }
 }

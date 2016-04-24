@@ -1,5 +1,6 @@
 use CommandLineOptions from argparse;
 use io;
+use os;
 use ion;
 use json;
 
@@ -53,7 +54,7 @@ func main(args) {
 
     options.addVerb('init', CommandLineOptions(), lambda(args) {
         print('Creating src directory');
-        io.Directory.create('./src');
+        os.mkdir('./src');
         print('Creating ionfile.json');
         ion.IonFileManager().create();
         print('Installing espresso test library');
