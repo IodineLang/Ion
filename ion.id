@@ -1,10 +1,10 @@
-use io;
 use os;
-use hash;
+use sys;
+use hashlib;
 use json;
 use fsutils;
 use SemanticVersion from semver;
-use WebClient from webclient;
+use WebClient from net.webclient;
 use ziplib;
 
 VERSION = 'v0.1.0';
@@ -22,7 +22,7 @@ class IonFileManager {
 
     func getDependencyLocation (self) {
         with (f = open ('./ionfile.json', 'r')) {
-            ionFile = json.parse (f.readAll ());
+            ionFile = json.parse (f.readall ());
             if (!ionFile.contains ('dependencyLocation')) {
                 return null;
             }
@@ -44,7 +44,7 @@ class IonFileManager {
     func addDep (self, pkg, fullVersion) {
         ionFile = null;
         with (f = open ('./ionfile.json', 'r')) {
-            ionFile = json.parse (f.readAll ());
+            ionFile = json.parse (f.readall ());
         }
         ver = SemanticVersion (fullVersion);
         ionFile['dependencies'][pkg] = '^{}.{}.{}'.format (
@@ -70,7 +70,7 @@ class DataManager {
         dataDir = '{}/data'.format(self.location);
         items = {};
         for (dataFile in _getFiles (dataDir)) {
-            _data = json.parse(open (dataFile, 'r').readAll ());
+            _data = json.parse(open (dataFile, 'r').readall ());
             items[_data['name']] = _data;
         }
 
@@ -87,8 +87,9 @@ class Uninstaller {
     func uninstall (self) {
         # TODO: Add force=true option
         dataDir = '{}/data'.format (self.location);
+        print ("Data dir #{dataDir}")
         for (dataFile in _getFiles (dataDir)) {
-            _data = json.parse (open (dataFile, 'r').readAll ());
+            _data = json.parse (open (dataFile, 'r').readall ());
             if (_data ['dependencies'].contains (self.package)) {
                 raise PackageRequiredException (self.package, _data ['name']);
             }
@@ -96,7 +97,7 @@ class Uninstaller {
 
         pkgDataLoc = '{}/{}.json'.format (dataDir, self.package);
         packageDataFile = open (pkgDataLoc, 'r');
-        _data = json.parse (packageDataFile.readAll ());
+        _data = json.parse (packageDataFile.readall ());
         for (file in _data ['files']) {
             _file = '{}/{}'.format (self.location, file);
             os.unlink (_file);
@@ -134,12 +135,12 @@ class Installer {
         # Chosen versions are stored here (so installations don't half-occur)
         chosenVersion = {};
 
-        for (pkg in toInstall) {
+        for (pkg, versions in toInstall) {
             data[pkg] = self.fetch (pkg);
-            for (version in data [pkg]['versions']) {
+            for (version, irrelevent in data [pkg]['versions']) {
                 _sv = SemanticVersion (version);
                 reject = false;
-                for (reqVersion in toInstall [pkg]) {
+                for (reqVersion in versions) {
                     if (!_sv.isMatch (reqVersion)) {
                         reject = true;
                         break;
@@ -176,18 +177,19 @@ class Installer {
         if (!fsutils.isdir (dataDir)) {
             os.mkdir (dataDir);
         }
-
-        for (pkg in chosenVersion) {
-            version = chosenVersion[pkg];
+   
+        for (pkg, version in chosenVersion) {
             pkgVerData = data[pkg]['versions'][version];
-            src = pkgVerData['download'];
-            zipLoc = '{}/{}-{}.zip'.format (cacheDir, pkg, version);
-            WebClient().downloadFile (src, zipLoc);
 
+            src = pkgVerData['download'];
+   
+            zipLoc = '{}/{}-{}.zip'.format (cacheDir, pkg, version);
+            WebClient().downloadfile (src, zipLoc);
+            
             # SHA1 verification
             if (pkgVerData.contains ('sha1')) {
                 with (f = open (zipLoc, 'r')) {
-                    if (hash.sha1 (f) != pkgVerData ['sha1']) {
+                    if (hashlib.sha1 (f) != pkgVerData ['sha1']) {
                         raise UnsafePackageException(pkg);
                     }
                 }
@@ -197,11 +199,12 @@ class Installer {
             ziplib.unzipToDirectory (zipLoc, cacheDir);
             zipDest = '{}/{}'.format (cacheDir, pkgVerData ['ionfileLocation']);
             ionLoc = '{}/ionfile.json'.format (zipDest);
-            ionData = json.parse (open(ionLoc, 'r').readAll());
+            ionData = json.parse (open(ionLoc, 'r').readall());
             sources = ionData ['sources'];
             for (source in sources) {
                 _loc = '{}/{}'.format (zipDest, source);
                 _files = [];
+               
                 for (dir in _getDirs (_loc)) {
                     for (file in _getFiles (dir)) {
                         _files.append (file.replace (_loc, '').substr (1));
@@ -213,7 +216,7 @@ class Installer {
                 }
 
                 fsutils.copytree (_loc, self.location, true);
-
+               
                 _dmp = json.dump({
                     'dependencies': data[pkg]['dependencies'],
                     'files': _files,
@@ -244,7 +247,7 @@ class Installer {
     func fetch (self, pkg) {
         loc = '{}/{}.json'.format (REPO, pkg);
         print('GET ' + loc);
-        return json.parse (WebClient ().downloadString (loc));
+        return json.parse (WebClient ().downloadstr (loc));
     }
 }
 
@@ -256,7 +259,7 @@ class DependencyResolver {
     func fetch (self) {
         loc = '{}/{}.json'.format(REPO, self.package);
         print('GET ' + loc);
-        return json.parse(WebClient().downloadString(loc));
+        return json.parse(WebClient().downloadstr(loc));
     }
 
     func resolve (self, *args) {
@@ -278,8 +281,8 @@ class DependencyResolver {
         dependencies = pkg ['dependencies'];
 
         # Key is package name, value is version
-        for (dep in dependencies) {
-            _deps = DependencyResolver (dep).resolve (dependencies[dep]);
+        for (dep, name in dependencies) {
+            _deps = DependencyResolver (dep).resolve (name);
             toInstall = self._join (toInstall, _deps);
         }
 
@@ -289,7 +292,7 @@ class DependencyResolver {
 
     func _join (self, base, toJoin) {
         # Joins two dependency chains. Gives up if versions conflict.
-        for (dep in toJoin) {
+        for (dep, irrelevent in toJoin) {
             if (!base.contains(dep)) {
                 # Create a 1-list of version constraints.
                 base[dep] = toJoin[dep];
@@ -304,20 +307,20 @@ class DependencyResolver {
     }
 }
 
-class PackageMismatchException : Exception {
+class PackageMismatchException extends Exception {
     func PackageMismatchException (self, package) {
         super ('Could not continue - cannot install {}!'.format (package));
     }
 }
 
-class PackageRequiredException : Exception {
+class PackageRequiredException extends Exception {
     func PackageRequiredException (self, package, dependedBy) {
         super ('Could not continue - cannot uninstall {} (required by {})!'
             .format(package, dependedBy));
     }
 }
 
-class UnsafePackageException : Exception {
+class UnsafePackageException extends Exception {
     func UnsafePackageException (self, package) {
         super (('The hash of {} could not be verified. Please delete ' +
             './.deps/cache immediately').format(package));

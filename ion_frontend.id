@@ -1,172 +1,71 @@
-use CommandLineOptions from argparse;
-use io;
 use os;
 use ion;
 use json;
+use fsutils;
+use ArgumentParser from argparse;
 
 func main(args) {
     print('Ion ({})'.format(ion.VERSION));
     print('Visit http://github.com/IodineLang/Ion for support');
     print('See the LICENSE file for legal information. (MIT License)');
     print('');
-    options = CommandLineOptions();
 
-    installOptions = CommandLineOptions();
-    installOptions.addArgument('package');
-    installOptions.addOption('save', 'no', false);
+    verb = args[0]; # First argument, should be a verb by default
 
-    options.addVerb('install', installOptions, lambda(args) {
+    parser = ArgumentParser ();
 
-        pkgs = ion.Installer(args.package).install();
+    parser.add ("verb");
+    parser.add ("package");
 
-        if (args.save != 'no') {
-            print('UPDATE ionfile.json');
-            ion.IonFileManager().addDep(args.package, pkgs[args.package]);
+    result = parser.parse (args);
+    
+    given (result ["verb"]) {
+        when "list-installed" {
+            items = ion.DataManager().getAll();
+            foreach (item, info in items) {
+                print ('{} {}'.format(item, info['version']));
+                foreach (dep in info['dependencies']) {
+                    print ('|- {} {}'.format(dep, info['dependencies'][dep]));
+                }
+            }
+
+        }   
+        when "install" {
+            pkgs = ion.Installer (result ["package"]).install ()
+
         }
+        when "install-deps" {
+            ionFile = json.parse (fsutils.read ("./ionfile.json"));
+          
+            pkgs = {};
 
-        print('');
-        print('Installation complete. Installed:');
-        foreach (pkg in pkgs) {
-            print('{} {}'.format(pkg, pkgs[pkg]));
-        }
-    });
+            foreach(dep, ver in ionFile['dependencies']) {
+                res = ion.Installer (dep).install (ver);
+                foreach (pkg in res) {
+                    pkgs[pkg] = res[pkg];
+                }
+            }
 
-    options.addVerb('install-deps', CommandLineOptions(), lambda(args) {
-        f = open('./ionfile.json', 'r');
-        ionFile = json.parse(f.readAllText());
-        f.close();
-        pkgs = {};
-
-        foreach(dep in ionFile['dependencies']) {
-            ver = ionFile['dependencies'][dep];
-            res = ion.Installer(dep).install(ver);
-            foreach (pkg in res) {
-                pkgs[pkg] = res[pkg];
+            print('');
+            print('Installation complete. Installed:');
+            foreach (pkg in pkgs) {
+                print('{} {}'.format (pkg, pkgs[pkg]));
             }
         }
-
-        print('');
-        print('Installation complete. Installed:');
-        foreach (pkg in pkgs) {
-            print('{} {}'.format(pkg, pkgs[pkg]));
+        when "uninstall" {
+            pkgs = ion.Uninstaller (result ["package"]).uninstall ();
+            print ('Removal complete.');
         }
-    });
-
-    options.addVerb('init', CommandLineOptions(), lambda(args) {
-        print('Creating src directory');
-        os.mkdir('./src');
-        print('Creating ionfile.json');
-        ion.IonFileManager().create();
-        print('Installing espresso test library');
-        testLib = 'espresso';
-        pkgs = ion.Installer(testLib).install();
-        ion.IonFileManager().addDep(testLib, pkgs[testLib]);
-        print('Done!');
-    });
-
-    options.addVerb('package', CommandLineOptions(), lambda(args) {
-        friendlyName = input('Enter project full name: ');
-        description = input('Enter a short description for the project: ');
-        maintainerName = input('Enter the maintainer name: ');
-        maintainerUrl = input('Enter a contact URL (for bug reports etc): ');
-        packageName = input('Enter package name (ion install ...): ');
-        print('');
-        useGithub = input('Are you using GitHub to host releases (y/n)? ');
-        version = '';
-        download = '';
-        ionfileLocation = '';
-        if (useGithub.startsWith('y')) {
-            print('Open your browser and create a GitHub release now.');
-            username = input('Enter GitHub username: ');
-            project = input('Enter project name: ');
-            version = input('Enter release tag: ');
-            download = 'https://github.com/{}/{}/archive/{}.zip'
-                .format(username, project, version);
-            if (version.startsWith('v')) {
-                ionfileLocation = '{}-{}'.format(project, version.substr(1));
-            } else {
-                ionfileLocation = '{}-{}'.format(project, version);
-            }
-        } else {
-            download = input('Enter download location: ');
-            ionfileLocation = input('Enter path to ionfile.json, without any' +
-                ' leading or trailing slash, and without ionfile.json');
+        when "init" {
+            print ('Creating src directory');
+            os.mkdir ('./src');
+            print ('Creating ionfile.json');
+            ion.IonFileManager ().create ();
+            print ('Installing espresso test library');
+            testLib = 'espresso';
+            pkgs = ion.Installer (testLib).install ();
+            ion.IonFileManager ().addDep (testLib, pkgs[testLib]);
+            print ('Done!');
         }
-
-        useHash = input('Use SHA1 hash (y/n)? ');
-        res = '';
-        print('Loading dependencies...');
-        ionFile = json.parse(open('./ionfile.json', 'r').readAllText());
-        dependencies = ionFile['dependencies'];
-        if (useHash.startsWith('y')) {
-            hash = input('Enter SHA1 hash: ');
-            res = json.dump({
-                'name': packageName,
-                'friendlyName': friendlyName,
-                'description': description,
-                'maintainer': {
-                    'name': maintainerName,
-                    'url': maintainerUrl
-                },
-                'versions': {
-                    version: {
-                        'download': download,
-                        'ionfileLocation': ionfileLocation,
-                        'sha1': hash
-                    }
-                },
-                'dependencies': dependencies
-            });
-        } else {
-            res = json.dump({
-                'name': packageName,
-                'friendlyName': friendlyName,
-                'description': description,
-                'maintainer': {
-                    'name': maintainerName,
-                    'url': maintainerUrl
-                },
-                'versions': {
-                    version: {
-                        'download': download,
-                        'ionfileLocation': ionfileLocation
-                    }
-                },
-                'dependencies': dependencies
-            });
-        }
-
-        print('Dumping to {}.json'.format(packageName));
-        f = open('./{}.json'.format(packageName), 'w');
-        f.write(res);
-        f.close();
-    });
-
-    options.addVerb('uninstall', installOptions, lambda(args) {
-        pkgs = ion.Uninstaller(args.package).uninstall();
-
-        print('Removal complete.');
-    });
-
-    options.addVerb('list-installed', CommandLineOptions(), lambda(args) {
-        items = ion.DataManager().getAll();
-
-        foreach (item in items) {
-            print ('{} {}'.format(item, items[item]['version']));
-            foreach (dep in items[item]['dependencies']) {
-                print ('|- {} {}'.format(dep, items[item]['dependencies'][dep]));
-            }
-        }
-    });
-
-    options.addVerb('help', CommandLineOptions(), lambda(args) {
-        print('Arguments with <> are required. [] indicates optional.');
-        print('help - prints this!');
-        print('install <package> - installs the specified package to ./.deps');
-        print('install-deps - installs all dependencies listed in ionfile.json');
-        print('uninstall <package> - uninstalls the specified package (unless' +
-              ' it is required by something else)');
-    });
-
-    argparse.parseArgs(options, args);
+    }
 }
