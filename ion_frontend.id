@@ -19,8 +19,8 @@ func main(args) {
 
     result = parser.parse (args);
     
-    given (result ["verb"]) {
-        when "list-installed" {
+    match result ["verb"] {
+        case "list-installed" {
             items = ion.DataManager().getAll();
             foreach (item, info in items) {
                 print ('{} {}'.format(item, info['version']));
@@ -30,11 +30,11 @@ func main(args) {
             }
 
         }   
-        when "install" {
+        case "install" {
             pkgs = ion.Installer (result ["package"]).install ()
 
         }
-        when "install-deps" {
+        case "install-deps" {
             ionFile = json.parse (fsutils.read ("./ionfile.json"));
           
             pkgs = {};
@@ -52,11 +52,11 @@ func main(args) {
                 print('{} {}'.format (pkg, pkgs[pkg]));
             }
         }
-        when "uninstall" {
+        case "uninstall" {
             pkgs = ion.Uninstaller (result ["package"]).uninstall ();
             print ('Removal complete.');
         }
-        when "init" {
+        case "init" {
             print ('Creating src directory');
             os.mkdir ('./src');
             print ('Creating ionfile.json');
@@ -66,6 +66,9 @@ func main(args) {
             pkgs = ion.Installer (testLib).install ();
             ion.IonFileManager ().addDep (testLib, pkgs[testLib]);
             print ('Done!');
+        }
+        case Something {
+            print ("Unregonized option #{result['verb']}")
         }
     }
 }
