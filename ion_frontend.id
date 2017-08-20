@@ -1,71 +1,122 @@
-use os;
-use ion;
-use json;
-use fsutils;
-use ArgumentParser from argparse;
+use os
+use sys
+use ion
+use json
+use curses
+use fsutils
+use inspect
+use ArgumentParser from argparse
+
+fileMgr = ion.IonFileManager () 
+dataMgr = ion.DataManager ()
+
+func canonicalize_name (name) => "".join (name.lower().filter (lambda (p) => p.isalnum())).lower ()
+
+func create_template (file) {
+    with (fd = open(file, "w")) {
+        fd.writeln ("func main (args) {")
+        fd.writeln ("    print ('Hello, World!')")
+        fd.writeln ("}")
+    }
+}
+
+func perform_dependency_check () {
+    ionFile = json.parse (fsutils.read ("./ionfile.json"))
+  
+    for (dep, ver in ionFile['dependencies']) {
+        if (!fsutils.isfile ("./src/.deps/data/#{dep}.json")) {
+            res = ion.Installer (dep).install (ver)
+        }
+        
+    }
+}
+
 
 func main(args) {
-    print('Ion ({})'.format(ion.VERSION));
-    print('Visit http://github.com/IodineLang/Ion for support');
-    print('See the LICENSE file for legal information. (MIT License)');
-    print('');
-
-    verb = args[0]; # First argument, should be a verb by default
-
-    parser = ArgumentParser ();
-
-    parser.add ("verb");
-    parser.add ("package");
-
-    result = parser.parse (args);
     
+    curses.init_pair (0, curses.COLOR_CYAN, 0)
+    curses.init_pair (1, curses.COLOR_WHITE, 0)
+    curses.init_pair (2, curses.COLOR_YELLOW, 0)
+    curses.init_pair (3, curses.COLOR_GREEN, 0)
+    
+
+    parser = ArgumentParser ()
+
+    parser.add ("verb")
+    parser.add ("package")
+
+    result = parser.parse (args)
+    
+
     match result ["verb"] {
         case "list-installed" {
-            items = ion.DataManager().getAll();
-            foreach (item, info in items) {
-                print ('{} {}'.format(item, info['version']));
-                foreach (dep in info['dependencies']) {
-                    print ('|- {} {}'.format(dep, info['dependencies'][dep]));
+            items = dataMgr.getAll()
+
+            for (item, info in items) {
+                print ('{} {}'.format (item, info['version']))
+                for (dep in info['dependencies']) {
+                    print ('|- {} {}'.format (dep, info['dependencies'][dep]))
                 }
             }
 
         }   
         case "install" {
             pkgs = ion.Installer (result ["package"]).install ()
-
+            
+            for (pkg, ver in pkgs) {
+                fileMgr.addDep (pkg, ver)
+            }
+            
+            ion.print_task ('Installation complete.')
         }
         case "install-deps" {
-            ionFile = json.parse (fsutils.read ("./ionfile.json"));
-          
-            pkgs = {};
-
-            foreach(dep, ver in ionFile['dependencies']) {
-                res = ion.Installer (dep).install (ver);
-                foreach (pkg in res) {
-                    pkgs[pkg] = res[pkg];
-                }
-            }
-
-            print('');
-            print('Installation complete. Installed:');
-            foreach (pkg in pkgs) {
-                print('{} {}'.format (pkg, pkgs[pkg]));
-            }
+            ion.print_task ("Installing dependencies")
+            
+            perform_dependency_check ()            
         }
         case "uninstall" {
-            pkgs = ion.Uninstaller (result ["package"]).uninstall ();
-            print ('Removal complete.');
+            pkgs = ion.Uninstaller (result ["package"]).uninstall ()
+            fileMgr.removeDep (result ["package"])
+            ion.print_task ('Removal complete.')
         }
         case "init" {
-            print ('Creating src directory');
+            name = input ("package name: ")
+            
+            ion.print_task ('Initializing ion project')
+            
+            ion.print_subtask ('Creating src directory')
+            
             os.mkdir ('./src');
-            print ('Creating ionfile.json');
-            ion.IonFileManager ().create ();
-            print ('Installing espresso test library');
-            testLib = 'espresso';
-            pkgs = ion.Installer (testLib).install ();
-            ion.IonFileManager ().addDep (testLib, pkgs[testLib]);
-            print ('Done!');
+            
+            ion.print_subtask ('Creating ionfile.json')
+           
+            canonical_name = "src/{}.id".format (canonicalize_name(name))
+            
+            create_template (canonical_name)
+
+            fileMgr.create (canonical_name, name)
+            
+            ion.print_task ('Done!')
+        }
+        case "run" {
+            
+            perform_dependency_check ()
+            
+            name = fileMgr.getPackageName ()
+            entryPoint = fileMgr.getEntrypoint ()
+
+            module = inspect.loadmodule (entryPoint)
+
+            ion.print_task ("Running package #{name}")
+            ion.print_subtask ("Loading #{entryPoint}")
+            
+            print ("")
+            
+            module ()
+
+            if (inspect.hasattribute (module, "main")) {
+                module.main (List ())
+            }
         }
         case Something {
             print ("Unregonized option #{result['verb']}")

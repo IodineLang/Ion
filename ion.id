@@ -1,42 +1,99 @@
 use os;
 use sys;
-use hashlib;
 use json;
+use curses;
+use ziplib;
 use fsutils;
+use hashlib;
 use SemanticVersion from semver;
 use WebClient from net.webclient;
-use ziplib;
 
-VERSION = 'v0.1.0';
+VERSION = 'v0.1.1';
 REPO = 'http://iodinelang.github.io/Ion-Default-Repo';
-LOCATION = './.deps';
-
+LOCATION = './src/.deps';
 
 func _getFiles (dir) => filter (os.list (dir), lambda (p) => fsutils.isfile (p));
 func _getDirs (dir) => filter (os.list (dir), lambda (p) => fsutils.isdir (p));
 
+func print_task (task) {
+    curses.attron (curses.COLOR_PAIR (3))
+    curses.print ("==> ")
+    curses.attroff (curses.COLOR_PAIR (3))
+    curses.attron (curses.COLOR_PAIR (1))
+    curses.print (task)
+    curses.print ("\n")
+    curses.attroff (curses.COLOR_PAIR (1))
+    
+    curses.refresh ()
+}
+
+func print_subtask (task) {
+    curses.attron (curses.COLOR_PAIR (0))
+    curses.print ("  --> ")
+    curses.attroff (curses.COLOR_PAIR (0))
+    curses.attron (curses.COLOR_PAIR (1))
+    curses.print (task)
+    curses.print ("\n")
+    curses.attroff (curses.COLOR_PAIR (1))
+    
+    curses.refresh ()
+}
+
 class IonFileManager {
     func IonFileManager (self) {
-
+        self._ionFile = null
     }
 
-    func getDependencyLocation (self) {
-        with (f = open ('./ionfile.json', 'r')) {
-            ionFile = json.parse (f.readall ());
-            if (!ionFile.contains ('dependencyLocation')) {
-                return null;
+    func loadJson (self) {
+        
+        if (self._ionFile is Null) {
+            
+            with (f = open ('./ionfile.json', 'r')) {
+                self._ionFile = json.parse (f.readall ())
             }
-
-            return ionFile ['dependencyLocation'];
         }
     }
 
-    func create (self) {
+    func getEntrypoint (self) {
+        self.loadJson ()
+    
+        if (!self._ionFile.contains ('entrypoint')) {
+            return null
+        }
+
+        return self._ionFile ['entrypoint']
+    
+    }
+    
+    func getPackageName (self) {
+        self.loadJson ()
+        
+        if (!self._ionFile.contains ('packageName')) {
+            return null
+        }
+
+        return self._ionFile ['packageName']
+    }
+    
+    func getDependencyLocation (self) {
+        self.loadJson ()
+    
+
+        if (!self._ionFile.contains ('dependencyLocation')) {
+            return null
+        }
+
+        return self._ionFile ['dependencyLocation']   
+    }
+
+    func create (self, entrypoint, packageName) {
         with (f = open ('./ionfile.json', 'w')) {
             f.write (json.dump({
                 'sources': ['src'],
                 'dependencies': {},
-                'dependencyLocation': 'src'
+                'dependencyLocation': 'src',
+                'packageName' : packageName,
+                'entrypoint' : entrypoint,
             }));
         }
     }
@@ -47,11 +104,25 @@ class IonFileManager {
             ionFile = json.parse (f.readall ());
         }
         ver = SemanticVersion (fullVersion);
+        
         ionFile['dependencies'][pkg] = '^{}.{}.{}'.format (
             ver.versionMajor,
             ver.versionMinor,
             ver.versionPatch
         );
+        with (f = open ('./ionfile.json', 'w')) {
+            f.write (json.dump (ionFile));
+        }
+    }
+    
+    func removeDep (self, pkg) {
+        ionFile = null;
+        with (f = open ('./ionfile.json', 'r')) {
+            ionFile = json.parse (f.readall ());
+        }
+        
+        ionFile['dependencies'].remove (pkg)
+        
         with (f = open ('./ionfile.json', 'w')) {
             f.write (json.dump (ionFile));
         }
@@ -87,7 +158,9 @@ class Uninstaller {
     func uninstall (self) {
         # TODO: Add force=true option
         dataDir = '{}/data'.format (self.location);
-        print ("Data dir #{dataDir}")
+    
+        print_task ("Uninstalling #{self.package}")
+    
         for (dataFile in _getFiles (dataDir)) {
             _data = json.parse (open (dataFile, 'r').readall ());
             if (_data ['dependencies'].contains (self.package)) {
@@ -100,9 +173,12 @@ class Uninstaller {
         _data = json.parse (packageDataFile.readall ());
         for (file in _data ['files']) {
             _file = '{}/{}'.format (self.location, file);
+            print_subtask ("Delete '#{_file}'")
             os.unlink (_file);
         }
 
+        print_subtask ("Delete '#{pkgDataLoc}'")
+        
         os.unlink (pkgDataLoc);
     }
 }
@@ -123,6 +199,9 @@ class Installer {
     }
 
     func install (self, *args) {
+        
+        print_task ("Installing '#{self.package}'")
+        
         version = '*';
         if (len (args) == 1) {
             version = args [0];
@@ -184,6 +263,10 @@ class Installer {
             src = pkgVerData['download'];
    
             zipLoc = '{}/{}-{}.zip'.format (cacheDir, pkg, version);
+            
+            
+            print_subtask ('GET ' + src);
+            
             WebClient().downloadfile (src, zipLoc);
             
             # SHA1 verification
@@ -201,6 +284,7 @@ class Installer {
             ionLoc = '{}/ionfile.json'.format (zipDest);
             ionData = json.parse (open(ionLoc, 'r').readall());
             sources = ionData ['sources'];
+            
             for (source in sources) {
                 _loc = '{}/{}'.format (zipDest, source);
                 _files = [];
@@ -227,6 +311,7 @@ class Installer {
                 open ('{}/{}.json'.format (dataDir, pkg), 'w').write (Str (_dmp));
             }
             self._rmrf (zipDest);
+            
         }
 
         self._rmrf (cacheDir);
@@ -246,7 +331,7 @@ class Installer {
 
     func fetch (self, pkg) {
         loc = '{}/{}.json'.format (REPO, pkg);
-        print('GET ' + loc);
+        print_subtask ('GET ' + loc);
         return json.parse (WebClient ().downloadstr (loc));
     }
 }
@@ -258,7 +343,7 @@ class DependencyResolver {
 
     func fetch (self) {
         loc = '{}/{}.json'.format(REPO, self.package);
-        print('GET ' + loc);
+        print_subtask ('GET ' + loc);
         return json.parse(WebClient().downloadstr(loc));
     }
 
