@@ -105,11 +105,11 @@ func main(args) {
             name = fileMgr.getPackageName ()
             entryPoint = fileMgr.getEntrypoint ()
 
-            module = inspect.loadmodule (entryPoint)
-
             ion.print_task ("Running package #{name}")
             ion.print_subtask ("Loading #{entryPoint}")
             
+            module = inspect.loadmodule (entryPoint)
+
             print ("")
             
             module ()
