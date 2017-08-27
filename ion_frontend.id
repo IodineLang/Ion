@@ -118,7 +118,7 @@ func main(args) {
                 module.main (List ())
             }
         }
-        case Something {
+        case _ {
             print ("Unregonized option #{result['verb']}")
         }
     }
