@@ -203,6 +203,7 @@ class Installer {
         print_task ("Installing '#{self.package}'")
         
         version = '*';
+
         if (len (args) == 1) {
             version = args [0];
         }
@@ -216,9 +217,11 @@ class Installer {
 
         for (pkg, versions in toInstall) {
             data[pkg] = self.fetch (pkg);
+
             for (version, irrelevent in data [pkg]['versions']) {
                 _sv = SemanticVersion (version);
                 reject = false;
+            
                 for (reqVersion in versions) {
                     if (!_sv.isMatch (reqVersion)) {
                         reject = true;
@@ -227,8 +230,14 @@ class Installer {
                 }
 
                 if (!reject) {
-                    chosenVersion [pkg] = version;
-                    break;
+                    if chosenVersion.contains (pkg) {
+                        otherVersion = chosenVersion [pkg]
+                        if _sv.isGreaterThan (otherVersion) {
+                            chosenVersion [pkg] = version
+                        }
+                    } else {
+                        chosenVersion [pkg] = version
+                    }
                 }
             }
 
