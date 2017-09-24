@@ -4,7 +4,7 @@ use json;
 use curses;
 use ziplib;
 use fsutils;
-use SemanticVersion from semver;
+use SemanticVersion from .semver;
 use WebClient from net.webclient;
 
 VERSION = 'v0.1.1';
