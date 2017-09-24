@@ -2,6 +2,7 @@ ION_PREFIX=/usr/lib
 ION_SCRIPT=/usr/bin/ion
 
 ION_FILES += semver.id
+ION_FILES += prettyconsole.id
 ION_FILES += ion.id
 ION_FILES += ion_frontend.id
 

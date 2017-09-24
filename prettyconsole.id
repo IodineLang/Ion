@@ -1,0 +1,59 @@
+use os
+use curses
+
+
+_isTerminalPresent = os.getenv ("TERM") isnot Null
+
+if _isTerminalPresent {
+    curses.init_pair (0, curses.COLOR_CYAN, 0)
+    curses.init_pair (1, curses.COLOR_WHITE, 0)
+    curses.init_pair (2, curses.COLOR_YELLOW, 0)
+    curses.init_pair (3, curses.COLOR_GREEN, 0)
+}
+
+func _print (msg) {
+    if _isTerminalPresent {
+        curses.print (msg)
+    } else {
+        stdout.write (msg)
+    }
+}
+
+func print_task (task) {
+    if _isTerminalPresent curses.attron (curses.COLOR_PAIR (3))
+
+    _print ("==> ")
+
+    if _isTerminalPresent {
+        curses.attroff (curses.COLOR_PAIR (3))
+        curses.attron (curses.COLOR_PAIR (1))
+    }
+
+    _print (task)
+    _print ("\n")
+
+    if _isTerminalPresent {
+        curses.attroff (curses.COLOR_PAIR (1))
+        curses.refresh ()
+    }
+}
+
+func print_subtask (task) {
+    if _isTerminalPresent curses.attron (curses.COLOR_PAIR (0))
+
+    _print ("  --> ")
+
+    if _isTerminalPresent {
+        curses.attroff (curses.COLOR_PAIR (0))
+        curses.attron (curses.COLOR_PAIR (1))
+    }
+
+    _print (task)
+    _print ("\n")
+    
+    if _isTerminalPresent {
+        curses.attroff (curses.COLOR_PAIR (1))
+        
+        curses.refresh ()
+    }
+}

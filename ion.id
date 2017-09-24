@@ -1,42 +1,21 @@
-use os;
-use sys;
-use json;
-use curses;
-use ziplib;
-use fsutils;
-use SemanticVersion from .semver;
-use WebClient from net.webclient;
+use os
+use sys
+use json
+use curses
+use ziplib
+use fsutils
+use hashlib
+use SemanticVersion from semver
+use WebClient from net.webclient
 
-VERSION = 'v0.1.1';
-REPO = 'http://iodinelang.github.io/Ion-Default-Repo';
-LOCATION = './src/.deps';
+use print_task, print_subtask from .prettyconsole
 
-func _getFiles (dir) => filter (os.list (dir), lambda (p) => fsutils.isfile (p));
-func _getDirs (dir) => filter (os.list (dir), lambda (p) => fsutils.isdir (p));
+VERSION = 'v0.1.1'
+REPO = 'http://iodinelang.github.io/Ion-Default-Repo'
+LOCATION = './src/.deps'
 
-func print_task (task) {
-    curses.attron (curses.COLOR_PAIR (3))
-    curses.print ("==> ")
-    curses.attroff (curses.COLOR_PAIR (3))
-    curses.attron (curses.COLOR_PAIR (1))
-    curses.print (task)
-    curses.print ("\n")
-    curses.attroff (curses.COLOR_PAIR (1))
-    
-    curses.refresh ()
-}
-
-func print_subtask (task) {
-    curses.attron (curses.COLOR_PAIR (0))
-    curses.print ("  --> ")
-    curses.attroff (curses.COLOR_PAIR (0))
-    curses.attron (curses.COLOR_PAIR (1))
-    curses.print (task)
-    curses.print ("\n")
-    curses.attroff (curses.COLOR_PAIR (1))
-    
-    curses.refresh ()
-}
+func _getFiles (dir) => filter (os.list (dir), lambda (p) => fsutils.isfile (p))
+func _getDirs (dir) => filter (os.list (dir), lambda (p) => fsutils.isdir (p))
 
 class IonFileManager {
     func IonFileManager (self) {
@@ -45,18 +24,16 @@ class IonFileManager {
 
     func loadJson (self) {
         
-        if (self._ionFile is Null) {
-            
-            with (f = open ('./ionfile.json', 'r')) {
-                self._ionFile = json.parse (f.readall ())
-            }
+        if self._ionFile is Null {
+            jsonText = fsutils.read ('./ionfile.json')
+            self._ionFile = json.parse (jsonText)
         }
     }
 
     func getEntrypoint (self) {
         self.loadJson ()
     
-        if (!self._ionFile.contains ('entrypoint')) {
+        unless self._ionFile.contains ('entrypoint') {
             return null
         }
 
@@ -67,7 +44,7 @@ class IonFileManager {
     func getPackageName (self) {
         self.loadJson ()
         
-        if (!self._ionFile.contains ('packageName')) {
+        unless self._ionFile.contains ('packageName') {
             return null
         }
 
@@ -77,8 +54,7 @@ class IonFileManager {
     func getDependencyLocation (self) {
         self.loadJson ()
     
-
-        if (!self._ionFile.contains ('dependencyLocation')) {
+        unless self._ionFile.contains ('dependencyLocation') {
             return null
         }
 
@@ -86,62 +62,58 @@ class IonFileManager {
     }
 
     func create (self, entrypoint, packageName) {
-        with (f = open ('./ionfile.json', 'w')) {
-            f.write (json.dump({
-                'sources': ['src'],
-                'dependencies': {},
-                'dependencyLocation': 'src',
-                'packageName' : packageName,
-                'entrypoint' : entrypoint,
-            }));
-        }
+        fsutils.write ('./ionfile.json', json.dump({
+            'sources': ['src'],
+            'dependencies': {},
+            'dependencyLocation': 'src',
+            'packageName' : packageName,
+            'entrypoint' : entrypoint,
+        }))
     }
 
     func addDep (self, pkg, fullVersion) {
-        ionFile = null;
-        with (f = open ('./ionfile.json', 'r')) {
-            ionFile = json.parse (f.readall ());
-        }
-        ver = SemanticVersion (fullVersion);
+
+        jsonText = fsutils.read ('./ionfile.json')
+        ionFile = json.parse (jsonText)
+
+        ver = SemanticVersion (fullVersion)
         
         ionFile['dependencies'][pkg] = '^{}.{}.{}'.format (
-            ver.versionMajor,
-            ver.versionMinor,
-            ver.versionPatch
-        );
-        with (f = open ('./ionfile.json', 'w')) {
-            f.write (json.dump (ionFile));
-        }
+            ver.version_major,
+            ver.version_minor,
+            ver.version_patch
+        )
+
+        fsutils.write ('./ionfile.json', json.dump (ionFile))
     }
     
     func removeDep (self, pkg) {
-        ionFile = null;
-        with (f = open ('./ionfile.json', 'r')) {
-            ionFile = json.parse (f.readall ());
-        }
         
+        jsonText = fsutils.read ('./ionfile.json')
+        ionFile = json.parse (jsonText)
+
         ionFile['dependencies'].remove (pkg)
         
-        with (f = open ('./ionfile.json', 'w')) {
-            f.write (json.dump (ionFile));
-        }
+        fsutils.write ('./ionfile.json', json.dump (ionFile))
     }
 }
 
 class DataManager {
     func DataManager (self, *args) {
-        self.location = LOCATION;
-        if (len (args) == 1) {
-            self.location = args[0];
+        self.location = LOCATION
+
+        if len (args) == 1 {
+            self.location = args[0]
         }
     }
 
     func getAll (self) {
-        dataDir = '{}/data'.format(self.location);
-        items = {};
-        for (dataFile in _getFiles (dataDir)) {
-            _data = json.parse(open (dataFile, 'r').readall ());
-            items[_data['name']] = _data;
+        dataDir = '{}/data'.format(self.location)
+        items = {}
+
+        for dataFile in _getFiles (dataDir) {
+            _data = json.parse(open (dataFile, 'r').readall ())
+            items[_data['name']] = _data
         }
 
         return items;
@@ -150,8 +122,8 @@ class DataManager {
 
 class Uninstaller {
     func Uninstaller (self, package) {
-        self.package = package;
-        self.location = LOCATION;
+        self.package = package
+        self.location = LOCATION
     }
 
     func uninstall (self) {
@@ -160,39 +132,42 @@ class Uninstaller {
     
         print_task ("Uninstalling #{self.package}")
     
-        for (dataFile in _getFiles (dataDir)) {
-            _data = json.parse (open (dataFile, 'r').readall ());
-            if (_data ['dependencies'].contains (self.package)) {
-                raise PackageRequiredException (self.package, _data ['name']);
+        for dataFile in _getFiles (dataDir) {
+            _data = json.parse (open (dataFile, 'r').readall ())
+
+            if _data ['dependencies'].contains (self.package) {
+                raise PackageRequiredException (self.package, _data ['name'])
             }
         }
 
-        pkgDataLoc = '{}/{}.json'.format (dataDir, self.package);
-        packageDataFile = open (pkgDataLoc, 'r');
-        _data = json.parse (packageDataFile.readall ());
-        for (file in _data ['files']) {
-            _file = '{}/{}'.format (self.location, file);
+        pkgDataLoc = '{}/{}.json'.format (dataDir, self.package)
+        packageDataFile = open (pkgDataLoc, 'r')
+
+        _data = json.parse (packageDataFile.readall ())
+
+        for file in _data ['files'] {
+            _file = '{}/{}'.format (self.location, file)
             print_subtask ("Delete '#{_file}'")
-            os.unlink (_file);
+            os.unlink (_file)
         }
 
         print_subtask ("Delete '#{pkgDataLoc}'")
         
-        os.unlink (pkgDataLoc);
+        os.unlink (pkgDataLoc)
     }
 }
 
 class Installer {
     func Installer (self, package, *args) {
-        self.location = LOCATION;
-        self.package = package;
-        self.dependencyResolver = DependencyResolver (package);
+        self.location = LOCATION
+        self.package = package
+        self.dependencyResolver = DependencyResolver (package)
         if (len (args) > 0) {
-            self.location = args[0];
+            self.location = args[0]
         } else {
-            _loc = IonFileManager ().getDependencyLocation ();
+            _loc = IonFileManager ().getDependencyLocation ()
             if (_loc != null) {
-                self.location = '{}/.deps'.format (_loc);
+                self.location = '{}/.deps'.format (_loc)
             }
         }
     }
@@ -203,35 +178,35 @@ class Installer {
         
         version = '*';
 
-        if (len (args) == 1) {
-            version = args [0];
+        if len (args) == 1 {
+            version = args [0]
         }
 
-        toInstall = self.dependencyResolver.resolve (version);
+        toInstall = self.dependencyResolver.resolve (version)
 
         # This will contain all package info (for use when unpacking)
-        data = {};
+        data = {}
         # Chosen versions are stored here (so installations don't half-occur)
-        chosenVersion = {};
+        chosenVersion = {}
 
-        for (pkg, versions in toInstall) {
-            data[pkg] = self.fetch (pkg);
-
-            for (version, irrelevent in data [pkg]['versions']) {
-                _sv = SemanticVersion (version);
+        for pkg, versions in toInstall {
+            data[pkg] = self.fetch (pkg)
+            
+            for version, irrelevent in data [pkg]['versions'] {
+                _sv = SemanticVersion (version)
                 reject = false;
             
-                for (reqVersion in versions) {
-                    if (!_sv.isMatch (reqVersion)) {
-                        reject = true;
-                        break;
+                for reqVersion in versions {
+                    if !_sv.ismatch (reqVersion) {
+                        reject = true
+                        break
                     }
                 }
 
-                if (!reject) {
+                if !reject {
                     if chosenVersion.contains (pkg) {
                         otherVersion = chosenVersion [pkg]
-                        if _sv.isGreaterThan (otherVersion) {
+                        if _sv > otherVersion {
                             chosenVersion [pkg] = version
                         }
                     } else {
@@ -240,130 +215,127 @@ class Installer {
                 }
             }
 
-            if (!chosenVersion.contains (pkg)) {
-                raise PackageMismatchException (pkg);
+            if !chosenVersion.contains (pkg) {
+                raise PackageMismatchException (pkg)
             }
         }
 
         # Actually install the packages
-        self._installToDisk (data, chosenVersion);
+        self._installToDisk (data, chosenVersion)
         return chosenVersion;
     }
 
     func _installToDisk (self, data, chosenVersion) {
-        if (!fsutils.isdir (self.location)) {
+        if !fsutils.isdir (self.location) {
             os.mkdir (self.location);
         }
 
-        cacheDir = '{}/cache'.format (self.location);
-        if (!fsutils.isdir (cacheDir)) {
-            os.mkdir (cacheDir);
+        cacheDir = '{}/cache'.format (self.location)
+
+        unless fsutils.isdir (cacheDir) {
+            os.mkdir (cacheDir)
         }
 
-        dataDir = '{}/data'.format (self.location);
-        if (!fsutils.isdir (dataDir)) {
-            os.mkdir (dataDir);
+        dataDir = '{}/data'.format (self.location)
+
+        if !fsutils.isdir (dataDir) {
+            os.mkdir (dataDir)
         }
    
-        for (pkg, version in chosenVersion) {
-            pkgVerData = data[pkg]['versions'][version];
+        for pkg, version in chosenVersion {
+            pkgVerData = data[pkg]['versions'][version]
 
-            src = pkgVerData['download'];
+            src = pkgVerData['download']
    
-            zipLoc = '{}/{}-{}.zip'.format (cacheDir, pkg, version);
+            zipLoc = '{}/{}-{}.zip'.format (cacheDir, pkg, version)
             
             
             print_subtask ('GET ' + src);
-            
-            WebClient().downloadfile (src, zipLoc);
-            
-            # SHA1 verification
-            if (pkgVerData.contains ('sha1')) {
-                with (f = open (zipLoc, 'r')) {
-                    if (hashlib.sha1 (f) != pkgVerData ['sha1']) {
-                        raise UnsafePackageException(pkg);
-                    }
-                }
-            }
 
+            WebClient().downloadfile (src, zipLoc)
 
-            ziplib.unzipToDirectory (zipLoc, cacheDir);
-            zipDest = '{}/{}'.format (cacheDir, pkgVerData ['ionfileLocation']);
-            ionLoc = '{}/ionfile.json'.format (zipDest);
-            ionData = json.parse (open(ionLoc, 'r').readall());
-            sources = ionData ['sources'];
+            ziplib.unzipToDirectory (zipLoc, cacheDir)
+
+            zipDest = '{}/{}'.format (cacheDir, pkgVerData ['ionfileLocation'])
+
+            ionLoc = '{}/ionfile.json'.format (zipDest)
+
+            ionData = json.parse (open(ionLoc, 'r').readall())
+
+            sources = ionData ['sources']
             
-            for (source in sources) {
-                _loc = '{}/{}'.format (zipDest, source);
-                _files = [];
+            for source in sources {
+                _loc = '{}/{}'.format (zipDest, source)
+                _files = []
                
-                for (dir in _getDirs (_loc)) {
-                    for (file in _getFiles (dir)) {
+                for dir in _getDirs (_loc) {
+                    for file in _getFiles (dir) {
                         _files.append (file.replace (_loc, '').substr (1));
                     }
                 }
 
-                for (file in _getFiles(_loc)) {
-                    _files.append (file.replace (_loc, '').substr (1));
+                for file in _getFiles(_loc) {
+                    _files.append (file.replace (_loc, '').substr (1))
                 }
 
-                fsutils.copytree (_loc, self.location, true);
+                fsutils.copytree (_loc, self.location, true)
                
-                _dmp = json.dump({
+                _dmp = json.dump ({
                     'dependencies': data[pkg]['dependencies'],
                     'files': _files,
                     'version': version,
                     'name': pkg
-                });
+                })
 
-                open ('{}/{}.json'.format (dataDir, pkg), 'w').write (Str (_dmp));
+                open ('{}/{}.json'.format (dataDir, pkg), 'w').write (Str (_dmp))
             }
-            self._rmrf (zipDest);
+            self._rmrf (zipDest)
             
         }
 
-        self._rmrf (cacheDir);
+        self._rmrf (cacheDir)
     }
 
     func _rmrf (self, loc) {
-        for (file in _getFiles(loc)) {
-            os.unlink(file);
+        for file in _getFiles(loc) {
+            os.unlink (file)
         }
 
-        for (dir in _getDirs(loc)) {
-            self._rmrf(dir);
+        for dir in _getDirs(loc) {
+            self._rmrf (dir)
         }
-        os.rmdir (loc);
+
+        os.rmdir (loc)
     }
 
 
     func fetch (self, pkg) {
-        loc = '{}/{}.json'.format (REPO, pkg);
-        print_subtask ('GET ' + loc);
-        return json.parse (WebClient ().downloadstr (loc));
+        loc = '{}/{}.json'.format (REPO, pkg)
+        print_subtask ('GET ' + loc)
+        return json.parse (WebClient ().downloadstr (loc))
     }
 }
 
 class DependencyResolver {
     func DependencyResolver (self, package) {
-        self.package = package;
+        self.package = package
     }
 
     func fetch (self) {
-        loc = '{}/{}.json'.format(REPO, self.package);
-        print_subtask ('GET ' + loc);
-        return json.parse(WebClient().downloadstr(loc));
+        loc = '{}/{}.json'.format(REPO, self.package)
+        print_subtask ('GET ' + loc)
+        return json.parse(WebClient().downloadstr(loc))
     }
 
     func resolve (self, *args) {
         # resolve collects a list of dependencies to fetch with version
         # constraints.
-        versions = ['*'];
-        if (len (args) > 0) {
+        versions = ['*']
+        if len (args) > 0 {
             # args appears to be a tuple.
             versions = [];
-            for (arg in args) {
-                versions.append (arg);
+            for arg in args {
+                versions.append (arg)
             }
         }
         # All dependencies are collected in toInstall
@@ -374,48 +346,48 @@ class DependencyResolver {
         dependencies = pkg ['dependencies'];
 
         # Key is package name, value is version
-        for (dep, name in dependencies) {
-            _deps = DependencyResolver (dep).resolve (name);
-            toInstall = self._join (toInstall, _deps);
+        for dep, name in dependencies {
+            _deps = DependencyResolver (dep).resolve (name)
+            toInstall = self._join (toInstall, _deps)
         }
 
-        toInstall = self._join (toInstall, {self.package: versions});
-        return toInstall;
+        toInstall = self._join (toInstall, {self.package: versions})
+        return toInstall
     }
 
     func _join (self, base, toJoin) {
         # Joins two dependency chains. Gives up if versions conflict.
-        for (dep, irrelevent in toJoin) {
-            if (!base.contains(dep)) {
+        for dep, irrelevent in toJoin {
+            if !base.contains(dep) {
                 # Create a 1-list of version constraints.
-                base[dep] = toJoin[dep];
+                base[dep] = toJoin[dep]
             } else {
-                for (_newDep in toJoin[dep]) {
-                    base[dep].append(_newDep);
+                for _newDep in toJoin[dep] {
+                    base[dep].append(_newDep)
                 }
             }
         }
 
-        return base;
+        return base
     }
 }
 
 class PackageMismatchException extends Exception {
     func PackageMismatchException (self, package) {
-        super ('Could not continue - cannot install {}!'.format (package));
+        super ('Could not continue - cannot install {}!'.format (package))
     }
 }
 
 class PackageRequiredException extends Exception {
     func PackageRequiredException (self, package, dependedBy) {
         super ('Could not continue - cannot uninstall {} (required by {})!'
-            .format(package, dependedBy));
+            .format(package, dependedBy))
     }
 }
 
 class UnsafePackageException extends Exception {
     func UnsafePackageException (self, package) {
         super (('The hash of {} could not be verified. Please delete ' +
-            './.deps/cache immediately').format(package));
+            './.deps/cache immediately').format(package))
     }
 }

@@ -1,11 +1,13 @@
 use os
 use sys
-use ion
 use json
 use curses
 use fsutils
 use inspect
 use ArgumentParser from argparse
+
+use .prettyconsole
+use .ion
 
 fileMgr = ion.IonFileManager () 
 dataMgr = ion.DataManager ()
@@ -33,13 +35,6 @@ func perform_dependency_check () {
 
 
 func main(args) {
-    
-    curses.init_pair (0, curses.COLOR_CYAN, 0)
-    curses.init_pair (1, curses.COLOR_WHITE, 0)
-    curses.init_pair (2, curses.COLOR_YELLOW, 0)
-    curses.init_pair (3, curses.COLOR_GREEN, 0)
-    
-
     parser = ArgumentParser ()
 
     parser.add ("verb")
@@ -67,28 +62,28 @@ func main(args) {
                 fileMgr.addDep (pkg, ver)
             }
             
-            ion.print_task ('Installation complete.')
+            prettyconsole.print_task ('Installation complete.')
         }
         case "install-deps" {
-            ion.print_task ("Installing dependencies")
+            prettyconsole.print_task ("Installing dependencies")
             
             perform_dependency_check ()            
         }
         case "uninstall" {
             pkgs = ion.Uninstaller (result ["package"]).uninstall ()
             fileMgr.removeDep (result ["package"])
-            ion.print_task ('Removal complete.')
+            prettyconsole.print_task ('Removal complete.')
         }
         case "init" {
             name = input ("package name: ")
             
-            ion.print_task ('Initializing ion project')
+            prettyconsole.print_task ('Initializing ion project')
             
-            ion.print_subtask ('Creating src directory')
+            prettyconsole.print_subtask ('Creating src directory')
             
             os.mkdir ('./src');
             
-            ion.print_subtask ('Creating ionfile.json')
+            prettyconsole.print_subtask ('Creating ionfile.json')
            
             canonical_name = "src/{}.id".format (canonicalize_name(name))
             
@@ -96,7 +91,7 @@ func main(args) {
 
             fileMgr.create (canonical_name, name)
             
-            ion.print_task ('Done!')
+            prettyconsole.print_task ('Done!')
         }
         case "run" {
             
@@ -105,8 +100,8 @@ func main(args) {
             name = fileMgr.getPackageName ()
             entryPoint = fileMgr.getEntrypoint ()
 
-            ion.print_task ("Running package #{name}")
-            ion.print_subtask ("Loading #{entryPoint}")
+            prettyconsole.print_task ("Running package #{name}")
+            prettyconsole.print_subtask ("Loading #{entryPoint}")
             
             module = inspect.loadmodule (entryPoint)
 
