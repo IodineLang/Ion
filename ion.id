@@ -4,7 +4,6 @@ use json;
 use curses;
 use ziplib;
 use fsutils;
-use hashlib;
 use SemanticVersion from semver;
 use WebClient from net.webclient;
 
